@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <sys/io.h>
 #include <errno.h>
+#include <gpio-loopback.h>
 
 /* GPIO register address from PCH start */
 #define GPIO_USE_SEL1 0x00 /* GPIO_USE_SEL1 offset */
@@ -49,16 +50,6 @@
 #define SIO_GPIO7_EN_OFFSET (0x1 << 7)
 #define SIO_GPIO7_LDN       0x07
 /* GPIO register address from SuperIO end*/
-
-#define GPIO_HIGH 1
-#define GPIO_LOW  0
-
-#ifdef DEBUG
-#define DBG(format, args...) \
-        printf("%s[%d]: "format, __func__, __LINE__, ##args)
-#else
-#define DBG(args...)
-#endif
 
 struct board_list
 {

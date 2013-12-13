@@ -7,29 +7,7 @@
 #include <unistd.h>
 #include <sys/io.h>
 #include <errno.h>
-
-
-/* GPIO register address from SuperIO start*/
-#define EFER                0x4E
-#define EFDR                0x4F
-#define SIO_LDSEL_REG       0x07
-#define SIO_ENABLE_REG      0x30
-#define SIO_GPIO_EN_REG     0x09
-#define SIO_GPIO7_DIR_REG   0xE0
-#define SIO_GPIO7_DATA_REG  0xE1
-#define SIO_GPIO7_EN_OFFSET (0x1 << 7)
-#define SIO_GPIO7_LDN       0x07
-/* GPIO register address from SuperIO end*/
-
-#define GPIO_HIGH 1
-#define GPIO_LOW  0
-
-#ifdef DEBUG
-#define DBG(format, args...) \
-        printf("%s[%d]: "format, __func__, __LINE__, ##args)
-#else
-#define DBG(args...)
-#endif
+#include <siolib.h>
 
 void sio_gpio_enable(int ldnum);
 unsigned char sio_gpio_get(int gpio);

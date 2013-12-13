@@ -12,7 +12,80 @@
 #include <sys/io.h>
 #include <errno.h>
 #include <gpio-loopback.h>
+#include <pch_gpiolib.h>
+#include <sio_gpiolib.h>
 
+struct board_list
+{
+	char name[10];
+	unsigned long int base_addr;
+};
+
+unsigned long int base_addr = 0;
+
+static void gpio_set_then_read(int gpio_out, int gpio_in, int value);
+static void sio_gpio_set_then_read(int gpio_out, int gpio_in, int value);
+static int sio_gpio_calculate(int gpio);
+
+/* Set gpio_out direction to output and read from gpio_in */
+static void gpio_set_then_read(int gpio_out, int gpio_in, int value)
+{
+	unsigned long int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
+	int new_gpio;
+
+	/* Set gpio_out direction to output and pull low or high. */
+	new_gpio = gpio_setup_addr(&gpio_use_sel_addr, &gp_io_sel_addr, \
+                               &gp_lvl_addr, gpio_out, base_addr);
+	gpio_enable(gpio_use_sel_addr, new_gpio);
+	gpio_dir_out(gp_io_sel_addr, gp_lvl_addr, new_gpio, value);
+
+	/* Set gpio_in direction to input and read data. */
+	new_gpio = gpio_setup_addr(&gpio_use_sel_addr, &gp_io_sel_addr, \
+                               &gp_lvl_addr, gpio_in, base_addr);
+	gpio_enable(gpio_use_sel_addr, new_gpio);
+	gpio_dir_in(gp_io_sel_addr, new_gpio);
+
+	printf("GPIO[%d] output %d to GPIO[%d] test ", gpio_out, value, gpio_in);
+	if (gpio_get(gp_lvl_addr, new_gpio) != value)
+		printf("FAIL!\n");
+	else
+		printf("PASS!\n");
+}
+
+static int sio_gpio_calculate(int gpio)
+{
+	if (gpio >= 70 && gpio <= 77)
+		return (gpio - 70);
+	else {
+		printf("GPIO number incorrect.\n");
+		exit(-1);
+	}
+}
+
+static void sio_gpio_set_then_read(int gpio_out, int gpio_in, int value)
+{
+	int new_gpio;
+	unsigned char b;
+
+	/* Enable GPIO7 group */
+	sio_gpio_enable(SIO_GPIO_EN_REG);
+	/* Select GPIO7 */
+	sio_select(SIO_GPIO7_LDN);
+
+	new_gpio = sio_gpio_calculate(gpio_out);
+	sio_gpio_dir_out(new_gpio, value);
+
+	new_gpio = sio_gpio_calculate(gpio_in);
+	sio_gpio_dir_in(new_gpio);
+
+	printf("GPIO[%d] output %d to GPIO[%d] test ", gpio_out, value, gpio_in);
+	if (sio_gpio_get(new_gpio) == value)
+		printf("PASS!\n");
+	else
+		printf("FAIL\n");
+}
+
+#if 0
 /* GPIO register address from PCH start */
 #define GPIO_USE_SEL1 0x00 /* GPIO_USE_SEL1 offset */
 #define GPIO_USE_SEL2 0x30 /* GPIO_USE_SEL2 offset */
@@ -50,14 +123,6 @@
 #define SIO_GPIO7_EN_OFFSET (0x1 << 7)
 #define SIO_GPIO7_LDN       0x07
 /* GPIO register address from SuperIO end*/
-
-struct board_list
-{
-	char name[10];
-	unsigned long int base_addr;
-};
-
-unsigned long int base_addr = 0;
 
 /* Functions for GPIO from PCH */
 static int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
@@ -318,6 +383,7 @@ static void sio_gpio_set_then_read(int gpio_out, int gpio_in, int value)
 		printf("FAIL\n");
 }
 /* Functions for GPIO from SuperIO end */
+#endif
 
 struct board_list list[] = {
 	{ "S0981", 0x1C00 },

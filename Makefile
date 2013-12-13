@@ -1,15 +1,24 @@
-CC=gcc
+CC = gcc
+INCLUDE = ${PWD}/
+
+DEBUG ?= 0
+ifeq ($(DEBUG), 1)
+	CFLAGS = -DDEBUG
+else
+	CFLAGS = -DNDEBUG
+endif
 
 all: gpio
 
-debug: CC += -DDEBUG
-debug: target
+gpio: sio_gpiolib.o pch_gpiolib.o
+	$(CC) $(CFLAGS) -I$(INCLUDE) sio_gpiolib.o pch_gpiolib.o gpio-loopback.c \
+		-o gpio-loopback
 
-gpio: siolib.o gpio-loopback.h
-	${CC} siolib.o gpio-loopback.c -o gpio-loopback -I${PWD}
+pch_gpiolib.o: pch_gpiolib.c
+	$(CC) $(CFLAGS) -I$(INCLUDE) -c pch_gpiolib.c
 
-siolib.o: gpio-loopback.h siolib.c siolib.h
-	${CC} siolib.c -c -I${PWD}/
+sio_gpiolib.o: sio_gpiolib.c
+	$(CC) $(CFLAGS) -I$(INCLUDE) -c sio_gpiolib.c
 
 clean:
 	rm -rf *.o gpio-loopback

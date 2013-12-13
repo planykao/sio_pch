@@ -20,8 +20,6 @@ unsigned char sio_gpio_get(int gpio);
 void sio_gpio_set(int gpio, int value);
 void sio_gpio_dir_in(int gpio);
 void sio_gpio_dir_out(int gpio, int value);
-void sio_gpio_set_then_read(int gpio_out, int gpio_in, int value);
-int sio_gpio_calculate(int gpio);
 void sio_enter(void);
 void sio_exit(void);
 unsigned char sio_read(int reg);

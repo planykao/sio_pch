@@ -12,8 +12,8 @@
 #include <sys/io.h>
 #include <errno.h>
 #include <gpio-loopback.h>
-#include <pch_gpiolib.h>
-#include <sio_gpiolib.h>
+#include <pchlib.h>
+#include <siolib.h>
 
 struct board_list
 {

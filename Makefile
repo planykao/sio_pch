@@ -10,18 +10,18 @@ endif
 
 all: gpio
 
-gpio: sio_gpiolib.o pch_gpiolib.o
-	$(CC) $(CFLAGS) -I$(INCLUDE) sio_gpiolib.o pch_gpiolib.o gpio-loopback.c \
+gpio: siolib.o pchlib.o
+	$(CC) $(CFLAGS) -I$(INCLUDE) siolib.o pchlib.o gpio-loopback.c \
 		-o gpio-loopback
 
 hwmon:
 	$(CC) $(CFLAGS) -I$(INCLUDE) hwmon.c -o hwmon
 
-pch_gpiolib.o: pch_gpiolib.c
-	$(CC) $(CFLAGS) -I$(INCLUDE) -c pch_gpiolib.c
+pchlib.o: pchlib.c
+	$(CC) $(CFLAGS) -I$(INCLUDE) -c pchlib.c
 
-sio_gpiolib.o: sio_gpiolib.c
-	$(CC) $(CFLAGS) -I$(INCLUDE) -c sio_gpiolib.c
+siolib.o: siolib.c
+	$(CC) $(CFLAGS) -I$(INCLUDE) -c siolib.c
 
 clean:
 	rm -rf *.o gpio-loopback

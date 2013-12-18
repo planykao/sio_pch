@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/io.h>
-#include <sio_gpiolib.h>
+#include <siolib.h>
 #include <gpio-loopback.h>
 
 void sio_enter(void)

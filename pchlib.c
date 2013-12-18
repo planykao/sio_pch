@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/io.h>
-#include <pch_gpiolib.h>
+#include <pchlib.h>
 #include <gpio-loopback.h>
 
 int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \

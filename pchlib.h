@@ -1,7 +1,7 @@
 #ifndef _MSI_PCH_H
 #define _MSI_PCH_H
 
-/* GPIO register address from PCH start */
+/* GPIO register address from PCH */
 #define GPIO_USE_SEL1 0x00 /* GPIO_USE_SEL1 offset */
 #define GPIO_USE_SEL2 0x30 /* GPIO_USE_SEL2 offset */
 #define GPIO_USE_SEL3 0x40 /* GPIO_USE_SEL3 offset */
@@ -25,9 +25,7 @@
 #define GP_LVL1_ADDR(addr) (addr + GP_LVL1)
 #define GP_LVL2_ADDR(addr) (addr + GP_LVL2)
 #define GP_LVL3_ADDR(addr) (addr + GP_LVL3)
-/* GPIO register address from PCH end */
 
-/* Functions for GPIO from PCH */
 int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
                     unsigned long int *gp_io_sel_addr, \
                     unsigned long int *gp_lvl_addr, \
@@ -38,6 +36,5 @@ void gpio_set(unsigned long int gpio_lvl_addr, int gpio, int value);
 void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio);
 void gpio_dir_out(unsigned long int gp_io_sel_addr, \
                   unsigned long int gp_lvl_addr, int gpio, int value);
-/* Functions for GPIO from PCH end */
 
 #endif

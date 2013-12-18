@@ -14,6 +14,9 @@ gpio: sio_gpiolib.o pch_gpiolib.o
 	$(CC) $(CFLAGS) -I$(INCLUDE) sio_gpiolib.o pch_gpiolib.o gpio-loopback.c \
 		-o gpio-loopback
 
+hwmon:
+	$(CC) $(CFLAGS) -I$(INCLUDE) hwmon.c -o hwmon
+
 pch_gpiolib.o: pch_gpiolib.c
 	$(CC) $(CFLAGS) -I$(INCLUDE) -c pch_gpiolib.c
 

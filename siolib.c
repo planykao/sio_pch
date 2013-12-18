@@ -1,13 +1,8 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <sys/io.h>
-#include <errno.h>
 #include <sio_gpiolib.h>
+#include <gpio-loopback.h>
 
 void sio_enter(void)
 {

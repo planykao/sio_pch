@@ -1,9 +1,7 @@
 #ifndef _MSI_SIOLIB_H
 #define _MSI_SIOLIB_H
 
-#include <gpio-loopback.h>
-
-/* GPIO register address from SuperIO start*/
+/* GPIO register address from SuperIO */
 #define EFER                0x4E
 #define EFDR                0x4F
 #define SIO_LDSEL_REG       0x07
@@ -13,7 +11,6 @@
 #define SIO_GPIO7_DATA_REG  0xE1
 #define SIO_GPIO7_EN_OFFSET (0x1 << 7)
 #define SIO_GPIO7_LDN       0x07
-/* GPIO register address from SuperIO end*/
 
 void sio_gpio_enable(int ldnum);
 unsigned char sio_gpio_get(int gpio);

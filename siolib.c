@@ -2,12 +2,19 @@
 #include <stdlib.h>
 #include <sys/io.h>
 #include <siolib.h>
-#include <gpio-loopback.h>
+#include <sitest.h>
 
-void sio_enter(void)
+void sio_enter(char *chip)
 {
-	outb_p(0x87, EFER);
-	outb_p(0x87, EFER);
+	if (strncmp("AST1300", chip, 7) == 0) {
+		outb_p(0xA5, EFER);
+		outb_p(0xA5, EFER);
+		DBG("chip = %s, EFER = %x, EFDR = %x\n", chip, EFER, EFDR);
+	} else {
+		outb_p(0x87, EFER);
+		outb_p(0x87, EFER);
+		DBG("chip = %s, EFER = %x, EFDR = %x\n", chip, EFER, EFDR);
+	}
 }
 
 void sio_exit(void)
@@ -51,6 +58,18 @@ void sio_gpio_enable(int ldnum)
 	DBG("b = %x\n", b);
 	b |= SIO_GPIO7_EN_OFFSET; /* Set bit7 to 1 to enable GPIO7 Group */
 	sio_write(SIO_ENABLE_REG, b); /* Write the value at CR 30h of Logical device 9 */
+}
+
+void sio_logical_device_enable(int bit)
+{
+	unsigned char b;
+	
+	/* Read the value from CR 30h of Logical Device register */
+	b = sio_read(SIO_ENABLE_REG);
+	DBG("read from CR30h = %x\n", b);
+	b |= (0x1 << bit); /* Set bitN to 1 to enable Logical Device */
+	/* Write the value to CR 30h of Logical device */
+	sio_write(SIO_ENABLE_REG, b);
 }
 
 unsigned char sio_gpio_get(int gpio) {

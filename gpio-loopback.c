@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <sys/io.h>
 #include <errno.h>
-#include <gpio-loopback.h>
+#include <sitest.h>
 #include <pchlib.h>
 #include <siolib.h>
 
@@ -134,6 +134,10 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
+	/* setup EFER and EFDR */
+	EFER = 0x4E;
+	EFDR = 0x4F;
+
 	/* Skip the header */
 	fscanf(fp, "%*[^\n]\n", NULL);
 	fscanf(fp, "%*[^\n]\n", NULL);
@@ -154,7 +158,7 @@ int main(int argc, char *argv[])
 			gpio_set_then_read(pin2, pin1, GPIO_LOW);
 			gpio_set_then_read(pin2, pin1, GPIO_HIGH);
 		} else {
-			sio_enter();
+			sio_enter(argv[1]);
 			sio_gpio_set_then_read(pin1, pin2, GPIO_LOW);
 			sio_gpio_set_then_read(pin1, pin2, GPIO_HIGH);
 			sio_gpio_set_then_read(pin2, pin1, GPIO_LOW);

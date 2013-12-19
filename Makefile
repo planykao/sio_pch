@@ -1,5 +1,7 @@
 CC = gcc
 INCLUDE = ${PWD}/
+GPIO_OBJS = pchlib.o siolib.o
+HWMON_OBJS = siolib.o
 
 DEBUG ?= 0
 ifeq ($(DEBUG), 1)
@@ -8,14 +10,14 @@ else
 	CFLAGS = -DNDEBUG
 endif
 
-all: gpio
+all: gpio hwmon
 
-gpio: siolib.o pchlib.o
-	$(CC) $(CFLAGS) -I$(INCLUDE) siolib.o pchlib.o gpio-loopback.c \
+gpio: $(GPIO_OBJS)
+	$(CC) $(CFLAGS) -I$(INCLUDE) $(GPIO_OBJS) gpio-loopback.c \
 		-o gpio-loopback
 
-hwmon:
-	$(CC) $(CFLAGS) -I$(INCLUDE) hwmon.c -o hwmon
+hwmon: $(HWMON_OBJS)
+	$(CC) $(CFLAGS) -I$(INCLUDE) $(HWMON_OBJS) hwmon.c -o hwmon
 
 pchlib.o: pchlib.c
 	$(CC) $(CFLAGS) -I$(INCLUDE) -c pchlib.c

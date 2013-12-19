@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <sys/io.h>
 #include <pchlib.h>
-#include <gpio-loopback.h>
+#include <sitest.h>
 
 int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
                             unsigned long int *gp_io_sel_addr, \

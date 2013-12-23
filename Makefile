@@ -29,4 +29,4 @@ pin_list.o: pin_list.c
 	$(CC) $(CFLAGS) -I$(INCLUDE) -c pin_list.c
 
 clean:
-	rm -rf *.o gpio-loopback
+	rm -rf *.o gpio-loopback hwmon

@@ -417,7 +417,7 @@ void Bank_Select(unsigned int Address, unsigned int bank)
 void Type_list(unsigned int *type, float par1, float par2, float up)
 {
 	if (par2 == 0) {
-		if(up < 20) {
+		if (up < 20) {
 			*type = 2;
 		} else if (up < 110 && up >= 20) {
 			*type = 0;

@@ -28,7 +28,7 @@
 #define LOW_PECI_BASE_ADDR   0x1C00
 #define HIGH_PECI_BASE_ADDR  0x1E72
 
-void Bank_Select(unsigned int Address, unsigned int bank);
+void bank_select(unsigned int address, unsigned int bank);
 void Type_list(unsigned int *type, float par1, float par2, float up);
 void init_PECI(void);
 void write_reg(unsigned char val_w, unsigned int lw, unsigned int hw);
@@ -37,16 +37,22 @@ unsigned int read_reg(unsigned int lr, unsigned int hr);
 unsigned int read_hwmon_base_address(void);
 unsigned char read_sio(unsigned int index);
 
-float Read_SIO_Sensor(unsigned int Address, unsigned int type, \
-		unsigned int index, unsigned int bank, \
-		float par1, float par2);
-float Read_AST_Sensor(unsigned int type, unsigned int index, \
-		float par1, float par2);
+float read_sio_sensor(unsigned int address, unsigned int type, \
+                      unsigned int index, unsigned int bank, \
+                      float par1, float par2);
+float read_ast_sensor(unsigned int type, unsigned int index, \
+                      float par1, float par2);
+
+float read_temperature(unsigned int address, unsigned int index, int plus, float par1, float par2);
+float read_fan_speed(unsigned int address, unsigned int index, int plus, float par1, float par2);
+float read_voltage1(unsigned int address, unsigned int index, int plus, float par1, float par2);
+float read_voltage2(unsigned int address, unsigned int index, int plus, float par1, float par2);
+float read_ast_temperature();
+float read_ast_fan_speed();
+float read_ast_voltage1();
+float read_ast_voltage2();
 
 void usage(void);
-
-//void (*read_sio_sensor[])(void);
-//void (*read_ast_sensor[])(void);
 
 char chip_model[10];
 
@@ -60,23 +66,19 @@ char chip_model[10];
  * the program will set the speed to 0 if the speed is Par1.
  * For Voltage (Type 3), Par1 is R1, Par2 is R2
  * Low and Up: The range of the sensors, if over range, 
- * the program will show Over range.
- */
-
-struct Sensor {
-	unsigned int Type;
-	unsigned char Name[30];
-	unsigned int Index;
-	unsigned int Bank;
-	float Par1;
-	float Par2;
-	float Low;
-	float Up;
-	float Min;
-	float Max;
+ * the program will show Over range. */
+struct sensor {
+	unsigned int type;
+	unsigned char name[30];
+	unsigned int index;
+	unsigned int bank;
+	float par1;
+	float par2;
+	float low;
+	float up;
+	float min;
+	float max;
 };
-
-typedef struct Sensor CSensor;
 
 int main(int argc, unsigned char *argv[])
 {
@@ -88,6 +90,21 @@ int main(int argc, unsigned char *argv[])
 	int Result = 0, Size = 0, line_str = 2;
 	float b = 0;
 	unsigned char Time;
+
+	/* read sensor functions initialize */
+	float (*read_sio_sensor1[])(unsigned int address, unsigned index, int plus, float par1, float par2) = {
+		read_temperature,
+		read_fan_speed,
+		read_voltage1,
+		read_voltage2
+	};
+
+	float (*read_ast_sensor1[])() = {
+		read_ast_temperature,
+		read_ast_fan_speed,
+		read_ast_voltage1,
+		read_ast_voltage2
+	};
 
 	/* change I/O privilege level to all access. For Linux only. */
 	if (iopl(3)) {
@@ -119,22 +136,25 @@ int main(int argc, unsigned char *argv[])
 	rewind(fp);
 
 	count = count - line_str;
-	CSensor Sensors[count];
+	struct sensor sensors[count];
 
 	fscanf(fp, "%*[^\n]\n");
 	while (!feof(fp)) {
 		/* Sensors Type, Name, Index, Bank number, Low limition, Up limition */
 		fscanf(fp, "%[^,], %d, %f, %f, %f, %f\n", \
-				&Sensors[j].Name, &Sensors[j].Index, &Sensors[j].Par1, \
-				&Sensors[j].Par2, &Sensors[j].Low, &Sensors[j].Up);
+				&sensors[j].name, &sensors[j].index, &sensors[j].par1, \
+				&sensors[j].par2, &sensors[j].low, &sensors[j].up);
 
+		DBG("sensors[%d].par2 = %d\n", j, sensors[j].par2);
 		j = j + 1;
 	}
 	fclose(fp);
 
 	for (j = 0; j < count; j++) {
-		Pin_list(chip_model, &Sensors[j].Index, &Sensors[j].Type, &Sensors[j].Bank);
-		Type_list(&Sensors[j].Type, Sensors[j].Par1, Sensors[j].Par2, Sensors[j].Up);
+		Pin_list(chip_model, &sensors[j].index, &sensors[j].type, \
+                 &sensors[j].bank);
+		Type_list(&sensors[j].type, sensors[j].par1, sensors[j].par2, \
+                  sensors[j].up);
 	}
 
 	if (strncmp("AST", chip_model, 3) == 0) {
@@ -164,18 +184,46 @@ int main(int argc, unsigned char *argv[])
 		/* Read the sensors and show the current value and record the min/max value. */
 		for (j = 0; j < count; j++) {
 			if (strncmp("AST", chip_model, 3) == 0) {
-				b = Read_AST_Sensor(Sensors[i].Type, Sensors[i].Index, \
-                                    Sensors[i].Par1, Sensors[i].Par2);
+				b = read_ast_sensor(sensors[i].type, sensors[i].index, \
+                                    sensors[i].par1, sensors[i].par2);
 			} else {
-				b = Read_SIO_Sensor(hw_base_addr, Sensors[j].Type, \
-                                    Sensors[j].Index, Sensors[j].Bank, \
-                                    Sensors[j].Par1, Sensors[j].Par2);
+				DBG("\nhw_base_addr = %x, j = %d, type = %d, index = %d,\
+						bank = %d, par1 = %f, par2 = %f\n", hw_base_addr, j, \
+						sensors[j].type, sensors[j].index, sensors[j].bank, \
+						sensors[j].par1, sensors[j].par2);
+#if 0
+				b = read_sio_sensor(hw_base_addr, sensors[j].type, \
+                                    sensors[j].index, sensors[j].bank, \
+                                    sensors[j].par1, sensors[j].par2);
+#else
+				if (strncmp("NCT", chip_model, 3) == 0) {
+					bank_select(hw_base_addr, sensors[j].bank); /* Set Bank */
+				}
+
+				int plus;
+
+				if (strncmp("NCT", chip_model, 3) == 0) {
+					plus = 5;
+				} else if (strcmp("F71889AD", chip_model) == 0) {
+					plus = 0;
+				} else if (strncmp("F7186", chip_model, 5) == 0) {
+					plus = 5;
+				}
+
+				b = read_sio_sensor1[sensors[j].type](hw_base_addr, \
+                                                      sensors[j].index, \
+													  plus, \
+                                                      sensors[j].par1, \
+                                                      sensors[j].par2);
+				DBG("b = %f\n", b);
+#endif
 			}
+		
 			/* Show Sensor name */
 			asprintf(&buf, "tput cup %d 0", j + 2);
 			system(buf);
 			free(buf);
-			printf("%s", Sensors[j].Name);
+			printf("%s", sensors[j].name);
 
 			/* Show Current value */
 			asprintf(&buf, "tput cup %d 30", j + 2);
@@ -185,35 +233,35 @@ int main(int argc, unsigned char *argv[])
 
 			/* Initial the Min and Max value at the first time */
 			if (i == 0) {
-				Sensors[j].Max = b;
-				Sensors[j].Min = b;
+				sensors[j].max = b;
+				sensors[j].min = b;
 			} else {  /* Change the Min and Max value if the current value is */
-				if (b > Sensors[j].Max) 
-					Sensors[j].Max = b;
+				if (b > sensors[j].max) 
+					sensors[j].max = b;
 
-				if (b < Sensors[j].Min) 
-					Sensors[j].Min = b;
+				if (b < sensors[j].min) 
+					sensors[j].min = b;
 			}
 
 			/* Show minimum value */
 			asprintf(&buf, "tput cup %d 42", j + 2);
 			system(buf);
 			free(buf);
-			printf("%.3f", Sensors[j].Min);
+			printf("%.3f", sensors[j].min);
 
 			/* Show maximum value */
 			asprintf(&buf, "tput cup %d 54", j + 2);
 			system(buf);
 			free(buf);
-			printf("%.3f", Sensors[j].Max);
+			printf("%.3f", sensors[j].max);
 
 			/* Show Status */
 			asprintf(&buf, "tput cup %d 66", j + 2);
 			system(buf);
 			free(buf);
 
-			if ((Sensors[j].Min >= Sensors[j].Low) && \
-                (Sensors[j].Max <= Sensors[j].Up)) {
+			if ((sensors[j].min >= sensors[j].low) && \
+                (sensors[j].max <= sensors[j].up)) {
 				printf("PASS");
 			} else {
 				printf("Fail!!");
@@ -337,7 +385,7 @@ void init_PECI(void)
 	sio_logical_device_enable(SIO_LPC2AHB_EN);
 	/* sio_lpc2ahb_enable(); */
 
-	/* Enable PECI, Negotiation Timing = 0x40, Clock divider =2 */
+	/* Enable PECI, Negotiation Timing = 0x40, Clock divider = 2 */
 	write_reg(0x02, LOW_PECI_BASE_ADDR + 0x00, HIGH_PECI_BASE_ADDR);
 	write_reg(0x40, LOW_PECI_BASE_ADDR + 0x01, HIGH_PECI_BASE_ADDR);
 	write_reg(0x01, LOW_PECI_BASE_ADDR + 0x02, HIGH_PECI_BASE_ADDR);
@@ -391,18 +439,19 @@ unsigned int read_hwmon_base_address(void)
 	/* Read the value of CR 61h of Logical device */
 	low_addr = sio_read(SIO_HW_BASE_REG + 1);
 	addr = high_addr | low_addr;
-	DBG("high_addr = %x, low_addr = %x, addr = %x\n", high_addr, low_addr, addr);
+	DBG("high_addr = %x, low_addr = %x, addr = %x\n", \
+        high_addr, low_addr, addr);
 
 	return addr;
 }
 
-void Bank_Select(unsigned int Address, unsigned int bank)
+void bank_select(unsigned int address, unsigned int bank)
 {
 	unsigned char data;
 	int plus = 5;
 
-	outb_p(EFER, Address + plus); /* Bank select */
-	data = inb_p(Address + plus + 1);
+	outb_p(EFER, address + plus); /* Bank select */
+	data = inb_p(address + plus + 1);
 
 	if (strcmp("NCT6776F", chip_model) == 0) {
 		data &= ~(7); /* Clear bit0~2 */
@@ -411,7 +460,7 @@ void Bank_Select(unsigned int Address, unsigned int bank)
 	}
 
 	data |= (bank); /* Set Bank */
-	outb_p(data, Address + plus + 1);
+	outb_p(data, address + plus + 1);
 }
 
 void Type_list(unsigned int *type, float par1, float par2, float up)
@@ -429,7 +478,7 @@ void Type_list(unsigned int *type, float par1, float par2, float up)
 	}
 }
 
-float Read_SIO_Sensor(unsigned int Address, unsigned int type, \
+float read_sio_sensor(unsigned int address, unsigned int type, \
                       unsigned int index, unsigned int bank, \
                       float par1, float par2)
 {
@@ -437,7 +486,7 @@ float Read_SIO_Sensor(unsigned int Address, unsigned int type, \
 	float result = 0;
 
 	if (strncmp("NCT", chip_model, 3) == 0) {
-		Bank_Select(Address, bank); /* Set Bank */
+		bank_select(address, bank); /* Set Bank */
 	}
 
 	if (strncmp("NCT", chip_model, 3) == 0) {
@@ -449,18 +498,18 @@ float Read_SIO_Sensor(unsigned int Address, unsigned int type, \
 	}
 
 	if (type == 0) { /* Type=0, read Temperature */
-		outb_p(index, Address + plus);
-		data = inb_p(Address + plus +1);
+		outb_p(index, address + plus);
+		data = inb_p(address + plus + 1);
 
 		result = data + par1;
 	}
 
 	if (type == 1) { /* Type=1, read Fan speed */
-		outb_p(index, Address + plus);
-		data = inb_p(Address + plus + 1);
+		outb_p(index, address + plus);
+		data = inb_p(address + plus + 1);
 		data = data << 8;
-		outb_p(index + 1, Address + plus);
-		data |= inb_p(Address + plus + 1);
+		outb_p(index + 1, address + plus);
+		data |= inb_p(address + plus + 1);
 
 		if (strncmp("F718", chip_model, 4) == 0) {
 			data = 1500000 / data;
@@ -473,27 +522,28 @@ float Read_SIO_Sensor(unsigned int Address, unsigned int type, \
 	}
 
 	if (type == 2) { /* Type=2, read Voltage. The Voltage is >0  and <2.048V */
-		outb_p(index, Address + plus);
-		data = inb_p(Address + plus + 1);
+		outb_p(index, address + plus);
+		data = inb_p(address + plus + 1);
 		result = (float) data * 0.008;
 	}
 
 	if (type == 3) { /* Type=3, read Voltage. The Voltage is >2.048V */
-		outb_p(index, Address + plus);
-		data = inb_p(Address + plus + 1);
+		outb_p(index, address + plus);
+		data = inb_p(address + plus + 1);
 		result = ((float) data) * ((float) (par1 + par2)) / ((float) par2) * 0.008;
 	}
 
 	return result;
 }
 
-float Read_AST_Sensor(unsigned int type, unsigned int index, float par1, float par2)
+float read_ast_sensor(unsigned int type, unsigned int index, \
+                      float par1, float par2)
 {
 	unsigned int data_l = 0;
 	unsigned int data_h = 0;
 	unsigned int data = 0;
-	unsigned int low_addr = LOW_ADC_BASE_ADDR + index;
-	unsigned int high_addr = HIGH_ADC_BASE_ADDR;
+	unsigned int low_addr;
+	unsigned int high_addr;
 	int Hz = 100000;
 	float result = 0;
 
@@ -566,6 +616,71 @@ float Read_AST_Sensor(unsigned int type, unsigned int index, float par1, float p
 		result = (((float) data) * ((float) par1) * 25 / 1023 / 100);
 	}
 
+	return result;
+}
+
+float read_temperature(unsigned int address, unsigned int index, int plus, float par1, float par2)
+{
+	return (sio_read_reg(index, address + plus) + par1);
+}
+
+float read_fan_speed(unsigned int address, unsigned int index, int plus, float par1, float par2)
+{
+	int data;
+
+	data = sio_read_reg(index, address + plus);
+	data = data << 8;
+	data |= sio_read_reg(index + 1, address + plus);
+
+	if (strncmp("F718", chip_model, 4) == 0) {
+		data = 1500000 / data;
+	}
+
+	if (data == par1) /* If the fan speed = par1, set the fan speed =0 */
+		data = 0;
+
+	return (data == par1) ? 0 : data;
+}
+
+float read_voltage1(unsigned int address, unsigned int index, int plus, float par1, float par2)
+{
+	return ((float) sio_read_reg(index, address + plus) * 0.008);
+}
+
+float read_voltage2(unsigned int address, unsigned int index, int plus, \
+                    float par1, float par2)
+{
+	int data;
+	float result;
+	data = sio_read_reg(index, address + plus);
+	DBG("address = %x, index = %d, par1 = %f, par2 = %f, data = %d\n", \
+         address, index, par1, par2, data);
+	result = ((float) data) * ((float) (par1 + par2)) / ((float) par2) * 0.008;
+	
+	return result;
+}
+
+float read_ast_temperature(void)
+{
+	float result;
+	return result;
+}
+
+float read_ast_fan_speed(void)
+{
+	float result;
+	return result;
+}
+
+float read_ast_voltage1(void)
+{
+	float result;
+	return result;
+}
+
+float read_ast_voltage2(void)
+{
+	float result;
 	return result;
 }
 

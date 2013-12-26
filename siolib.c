@@ -22,19 +22,30 @@ void sio_exit(void)
 	outb_p(0xAA, EFER);
 }
 
-unsigned char sio_read(int reg)
+int sio_read(int reg)
 {
-	unsigned char b;
+	int b;
 	
 	outb_p(reg, EFER); /* Sent index to EFER */
 	b = inb_p(EFDR); /* Get the value from EFDR */
 	return b; /* Return the value */
 }
 
-void sio_write(int reg, unsigned char val)
+void sio_write(int reg, int val)
 {
 	outb_p(reg, EFER); /* Sent index at EFER */
 	outb_p(val, EFDR); /* Send val_w at FEDR */
+}
+
+int sio_read_reg(int index, int address)
+{
+	outb_p(index, address);
+	return inb_p(address + 1);
+}
+
+void sio_write_reg(int index, int address)
+{
+	outb_p(index, address);
 }
 
 /* ldsel_reg: Logical Device Select 
@@ -47,22 +58,23 @@ void sio_select(int ldnum)
 
 void sio_gpio_enable(int ldnum)
 {
-	unsigned char b;
+	int b;
 	
-	/*sio_write(7, 9);*/ /* Select Logical device number 9 */
 	/* CR 30h of Logical Device Number 9 is enable register for GPIO1~7 */
 	sio_select(ldnum);
 
 	/* Active GPIO7 Group */
-	b = sio_read(SIO_ENABLE_REG); /* Read the value of CR 30h of Logical device 9 */
+	/* Read the value of CR 30h of Logical device 9 */
+	b = sio_read(SIO_ENABLE_REG);
 	DBG("b = %x\n", b);
 	b |= SIO_GPIO7_EN_OFFSET; /* Set bit7 to 1 to enable GPIO7 Group */
-	sio_write(SIO_ENABLE_REG, b); /* Write the value at CR 30h of Logical device 9 */
+	/* Write the value at CR 30h of Logical device 9 */
+	sio_write(SIO_ENABLE_REG, b); 
 }
 
 void sio_logical_device_enable(int bit)
 {
-	unsigned char b;
+	int b;
 	
 	/* Read the value from CR 30h of Logical Device register */
 	b = sio_read(SIO_ENABLE_REG);
@@ -72,13 +84,13 @@ void sio_logical_device_enable(int bit)
 	sio_write(SIO_ENABLE_REG, b);
 }
 
-unsigned char sio_gpio_get(int gpio) {
+int sio_gpio_get(int gpio) {
 	return ((sio_read(SIO_GPIO7_DATA_REG) >> gpio) & 0x1);
 }
 
 void sio_gpio_set(int gpio, int value)
 {
-	unsigned char b;
+	int b;
 
 	b = sio_read(SIO_GPIO7_DATA_REG);
 	b &= ~(0x1 << gpio); /* clear */
@@ -88,7 +100,7 @@ void sio_gpio_set(int gpio, int value)
 
 void sio_gpio_dir_in(int gpio)
 {
-	unsigned char b;
+	int b;
 
 	b = sio_read(SIO_GPIO7_DIR_REG);
 	b |= (0x1 << gpio); /* set 1 for input */
@@ -97,7 +109,7 @@ void sio_gpio_dir_in(int gpio)
 
 void sio_gpio_dir_out(int gpio, int value)
 {
-	unsigned char b;
+	int b;
 
 	/* direction */
 	b = sio_read(SIO_GPIO7_DIR_REG);
@@ -107,3 +119,59 @@ void sio_gpio_dir_out(int gpio, int value)
 	/* data */
 	sio_gpio_set(gpio, value);
 }
+
+int sio_astx300_read(unsigned int lr, unsigned int hr)
+{
+	int b;
+	unsigned int mod;
+
+	/* Set iLPC2AHB Length to 1 Byte */
+	b = sio_read(0xF8);
+	b &= ~(0x03);
+	sio_write(0xF8, b);
+	
+	/* Address must be multiple of 4 */
+	/* TODO: why???? */
+	mod = lr % 4;
+	lr = lr - mod;
+
+	b = hr >> 8; /* Set address */
+	sio_write(0xF0, b);
+	b = hr & 0x00FF;
+	sio_write(0xF1, b);
+	b = lr >> 8;
+	sio_write(0xF2, b);
+	b = lr & 0x00FF;
+	sio_write(0xF3, b);
+
+	sio_read(0xFE); /* Read Trigger */
+
+	b = sio_read(0xF7 - mod); /* Get the value */
+
+	return b;
+}
+
+void sio_astx300_write(unsigned char val_w, unsigned int lw, unsigned int hw)
+{
+	int b;
+	unsigned int mod;
+
+	/* Set iLPC2AHB Length to 1 Byte */
+	b = sio_read(0xF8);
+	b &= ~(0x03);
+	sio_write(0xF8, b);
+
+	b = hw >> 8; /* Set address */
+	sio_write(0xF0, b);
+	b = hw & 0x00FF;
+	sio_write(0xF1, b);
+	b = lw >> 8;
+	sio_write(0xF2, b);
+	b = lw & 0x00FF;
+	sio_write(0xF3, b);
+
+	sio_write(0xF7, val_w); /* Send the value */
+
+	sio_write(0xFE, 0xCF); /* Write Trigger */
+}
+

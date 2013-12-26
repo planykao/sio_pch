@@ -14,19 +14,40 @@
 #define SIO_LPC2AHB_LDN     0x0D
 #define SIO_LPC2AHB_EN      0
 
+/* Refer to AST 1300 firmware spec. ver.063 */
+#define LOW_ADC_BASE_ADDR    0x1600
+#define HIGH_ADC_BASE_ADDR   0x1E72
+
+#define LOW_DATA_BASE_ADDR   0x2000
+#define HIGH_DATA_BASE_ADDR  0x1E72
+
+#define LOW_I2C_BASE_ADDR    0x1700
+#define HIGH_I2C_BASE_ADDR   0x1E72
+
+#define LOW_TACHO_BASE_ADDR  0x1500
+#define HIGH_TACHO_BASE_ADDR 0x1E72
+
+#define LOW_PECI_BASE_ADDR   0x1C00
+#define HIGH_PECI_BASE_ADDR  0x1E72
+
 unsigned int EFER;
 unsigned int EFDR;
 
 void sio_gpio_enable(int ldnum);
 void sio_logical_device_enable(int bit);
-unsigned char sio_gpio_get(int gpio);
+int sio_gpio_get(int gpio);
 void sio_gpio_set(int gpio, int value);
 void sio_gpio_dir_in(int gpio);
 void sio_gpio_dir_out(int gpio, int value);
 void sio_enter(char *chip);
 void sio_exit(void);
-unsigned char sio_read(int reg);
-void sio_write(int reg, unsigned char val);
+int sio_read(int reg);
+void sio_write(int reg, int val);
+int sio_read_reg(int index, int address);
+void sio_write_reg(int index, int address);
 void sio_select(int ldnum);
+
+int sio_astx300_read(unsigned int lr, unsigned int hr);
+void sio_astx300_write(unsigned char val_w, unsigned int lw, unsigned int hw);
 
 #endif

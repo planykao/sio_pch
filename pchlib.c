@@ -68,7 +68,9 @@ void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio)
 	unsigned long int buf;
 
 	buf = inl_p(gp_io_sel_addr); /* Read the original value */
-	buf |= (0x1 << gpio); /* Set the bit to 0 for input */
+	DBG("buf = %x, gpio = %d\n", buf, gpio);
+	buf |= (0x1 << gpio); /* Set the bit to 1 for input */
+	DBG("buf = %x, gpio = %d\n", buf, gpio);
 	outl_p(buf, gp_io_sel_addr); /* Output the value */
 }
 
@@ -78,7 +80,9 @@ void gpio_dir_out(unsigned long int gp_io_sel_addr, \
 	unsigned long int buf;
 	
 	buf = inl_p(gp_io_sel_addr); /* Read the original value */
+	DBG("buf = %x, gpio = %d\n", buf, gpio);
 	buf &= ~(0x1 << gpio); /* Set the bit to 0 for output */
+	DBG("buf = %x, gpio = %d\n", buf, gpio);
 	outl_p(buf, gp_io_sel_addr); /* Output the value */
 
 	buf = inl_p(gp_lvl_addr); /* Read the original value */

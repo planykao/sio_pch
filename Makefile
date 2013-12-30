@@ -1,5 +1,6 @@
 CC = gcc
 CONFDIR = ${PWD}/conf
+SCRIPTDIR = ${PWD}/script
 RELEASEDIR = ${PWD}/release
 INCLUDE = ${PWD}/
 LP_RELEASE_DIR = $(RELEASEDIR)/loopback
@@ -35,15 +36,11 @@ pin_list.o: pin_list.c
 
 .PHONY: release	
 release:
-	mkdir -p $(LP_RELEASE_DIR)
-	mkdir -p $(BP_RELEASE_DIR)
-	mkdir -p $(HWMON_RELEASE_DIR)
-	cp -rf gpio-loopback $(LP_RELEASE_DIR)
-	cp -rf bypass $(BP_RELEASE_DIR)
-	cp -rf hwmon $(HWMON_RELEASE_DIR)
-	cp -rf $(CONFDIR)/loopback/* $(LP_RELEASE_DIR)
-	cp -rf $(CONFDIR)/bypass/* $(BP_RELEASE_DIR)
-	cp -rf $(CONFDIR)/hwmon/* $(HWMON_RELEASE_DIR)
+	cp -rf $(CONFDIR)/* $(RELEASEDIR)
+	cp -rf $(SCRIPTDIR)/* $(RELEASEDIR)
+	if [ -f gpio-loopback ]; then cp -rf gpio-loopback $(LP_RELEASE_DIR); fi
+	if [ -f bypass ]; then cp -rf bypass $(BP_RELEASE_DIR); fi
+	if [ -f hwmon ]; then cp -rf hwmon $(HWMON_RELEASE_DIR); fi
 
 .PHONY: clean
 clean:

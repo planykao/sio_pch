@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/io.h>
@@ -10,7 +11,6 @@
 
 #include <sitest.h>
 #include <siolib.h>
-#include <pin_list.h>
 
 /* Refer to AST 1300 firmware spec. ver.063 */
 #define LOW_ADC_BASE_ADDR    0x1600
@@ -28,33 +28,27 @@
 #define LOW_PECI_BASE_ADDR   0x1C00
 #define HIGH_PECI_BASE_ADDR  0x1E72
 
+/* The base address is 0x1E720000 */
+#define AST1300_CTL_BASE_ADDR 0x1E72
+
 void bank_select(unsigned int address, unsigned int bank);
-void Type_list(unsigned int *type, float par1, float par2, float up);
-void init_PECI(void);
-void write_reg(unsigned char val_w, unsigned int lw, unsigned int hw);
+void sio_ilpc2ahb_setup(void);
+void init_peci(void);
+void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
 
-unsigned int read_reg(unsigned int lr, unsigned int hr);
+unsigned int sio_ilpc2ahb_read(unsigned int lr, unsigned int hr);
 unsigned int read_hwmon_base_address(void);
-unsigned char read_sio(unsigned int index);
 
-float read_sio_sensor(unsigned int address, unsigned int type, \
-                      unsigned int index, unsigned int bank, \
-                      float par1, float par2);
-float read_ast_sensor(unsigned int type, unsigned int index, \
-                      float par1, float par2);
-
-float read_temperature(unsigned int address, unsigned int index, int plus, float par1, float par2);
-float read_fan_speed(unsigned int address, unsigned int index, int plus, float par1, float par2);
-float read_voltage1(unsigned int address, unsigned int index, int plus, float par1, float par2);
-float read_voltage2(unsigned int address, unsigned int index, int plus, float par1, float par2);
-float read_ast_temperature();
-float read_ast_fan_speed();
-float read_ast_voltage1();
-float read_ast_voltage2();
+float read_temperature(unsigned int address, unsigned int index, int plus, ...);
+float read_fan_speed(unsigned int address, unsigned int index, int plus, ...);
+float read_voltage1(unsigned int address, unsigned int index, int plus, ...);
+float read_voltage2(unsigned int address, unsigned int index, int plus, ...);
+float read_ast_temperature_peci(unsigned int index, ...);
+float read_ast_temperature_i2c(unsigned int index, ...);
+float read_ast_fan(unsigned int index, ...);
+float read_ast_voltage(unsigned int index, ...);
 
 void usage(void);
-
-char chip_model[10];
 
 /* Define the struct for Sensor.
  * Type 0: Temperature; 1: FAN Speed; 2: Voltage > 0 and < 2.048V; 
@@ -68,43 +62,49 @@ char chip_model[10];
  * Low and Up: The range of the sensors, if over range, 
  * the program will show Over range. */
 struct sensor {
-	unsigned int type;
-	unsigned char name[30];
+	int type;
+	char name[30];
+	char pin_name[5];
 	unsigned int index;
-	unsigned int bank;
+	int bank;
 	float par1;
 	float par2;
-	float low;
-	float up;
+	float low_limit;
+	float high_limit;
 	float min;
 	float max;
 };
 
+void type_list(struct sensor *sensors);
+void pin_list(char *chip_model, struct sensor *sensors);
+
+char chip_model[10];
+
 int main(int argc, unsigned char *argv[])
 {
 	FILE *fp;
-	char ch;
 	char *buf;
-	unsigned int hw_base_addr;
+	unsigned int hw_base_addr, base_addr, offset;
 	int i = 0, j = 0, count = 0;
 	int Result = 0, Size = 0, line_str = 2;
 	float b = 0;
 	unsigned char Time;
 
-	/* read sensor functions initialize */
-	float (*read_sio_sensor1[])(unsigned int address, unsigned index, \
-                                int plus, float par1, float par2) = {
+	/* read sensor functions initialize, for SIO */
+	float (*read_sio_sensor[])(unsigned int address, unsigned int index, \
+                               int plus, ...) = {
 		read_temperature,
 		read_fan_speed,
 		read_voltage1,
 		read_voltage2
 	};
 
-	float (*read_ast_sensor1[])() = {
-		read_ast_temperature,
-		read_ast_fan_speed,
-		read_ast_voltage1,
-		read_ast_voltage2
+	/* read sensor functions initialize, for AST1300 */
+	float (*read_ast_sensor[])(unsigned int index, ...) = {
+		read_ast_temperature_peci,
+		read_ast_temperature_i2c,
+		read_ast_fan,
+		read_ast_voltage
 	};
 
 	/* change I/O privilege level to all access. For Linux only. */
@@ -121,56 +121,89 @@ int main(int argc, unsigned char *argv[])
 
 	Time = atoi(argv[1]);
 
-	fp=fopen("hwm.conf", "r");
+	fp = fopen("hwm.conf", "r");
 
-	while ((ch = fgetc(fp)) != EOF) {
-		if (count == 0) {
-			chip_model[i] = ch;
-			i = i + 1;
-		}
+	/* Skip the header */
+	fscanf(fp, "%*[^\n]\n", NULL);
+	fscanf(fp, "%*[^\n]\n", NULL);
+	fscanf(fp, "%*[^\n]\n", NULL);
+	/* Remember the offset, read from this position later. */
+	offset = ftell(fp);
+	DBG("offset = %d\n", offset);
+	/* Skip 4th line. */
+	fscanf(fp, "%*[^\n]\n", NULL);
 
-		if (ch == '\n')
-			++count;
+	/* Count how many data we need to read. */
+	while (!feof(fp)) {
+		fscanf(fp, "%*[^\n]\n", NULL);
+		count++;
 	}
-	chip_model[i - 1] = '\0';
+	DBG("count = %d\n", count);
 
-	rewind(fp);
+	fseek(fp, offset, SEEK_SET);
 
-	count = count - line_str;
 	struct sensor sensors[count];
 
-	fscanf(fp, "%*[^\n]\n");
-	while (!feof(fp)) {
-		/* Sensors Type, Name, Index, Bank number, Low limition, Up limition */
-		fscanf(fp, "%[^,], %d, %f, %f, %f, %f\n", \
-				&sensors[j].name, &sensors[j].index, &sensors[j].par1, \
-				&sensors[j].par2, &sensors[j].low, &sensors[j].up);
-
-		DBG("sensors[%d].par2 = %d\n", j, sensors[j].par2);
-		j = j + 1;
-	}
-	fclose(fp);
-
-	for (j = 0; j < count; j++) {
-		Pin_list(chip_model, &sensors[j].index, &sensors[j].type, \
-                 &sensors[j].bank);
-		Type_list(&sensors[j].type, sensors[j].par1, sensors[j].par2, \
-                  sensors[j].up);
-	}
+	fscanf(fp, "%[^,], %x\n", chip_model, &EFER);
+	EFDR = EFER + 1;
+	DBG("chip_model = %s, EFER = %x\n", chip_model, EFER);
 
 	if (strncmp("AST", chip_model, 3) == 0) {
-		EFER = 0x2E;
-		EFDR = 0x2F;
-		sio_enter(chip_model);
-		init_PECI();
+		while (!feof(fp)) {
+			fscanf(fp, "%[^,], %[^,], %f, %f, %f, %f\n", \
+                        &sensors[j].name, &sensors[j].pin_name, \
+                        &sensors[j].par1, &sensors[j].par2, \
+                        &sensors[j].low_limit, &sensors[j].high_limit);
+
+			DBG("name = %s, pin_name = %s, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
+                 sensors[j].name, sensors[j].pin_name, sensors[j].par1, \
+                 sensors[j].par2, sensors[j].low_limit, sensors[j].high_limit);
+
+			pin_list(chip_model, &sensors[j]);
+			type_list(&sensors[j]);
+
+			DBG("name = %s, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
+                 sensors[j].name, sensors[j].index, sensors[j].par1, \
+                 sensors[j].par2, sensors[j].low_limit, sensors[j].high_limit);
+
+			j++;
+		}
 	} else {
-		EFER = 0x4E;
-		EFDR = 0x4F;
-		sio_enter(chip_model);
+		while (!feof(fp)) {
+			fscanf(fp, "%[^,], %d, %f, %f, %f, %f\n", \
+                        &sensors[j].name, &sensors[j].index, &sensors[j].par1, \
+                        &sensors[j].par2, &sensors[j].low_limit, \
+                        &sensors[j].high_limit);
+
+			DBG("name = %s, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
+                 sensors[j].name, sensors[j].par1, sensors[j].par2, \
+                 sensors[j].low_limit, sensors[j].high_limit);
+
+			pin_list(chip_model, &sensors[j]);
+			type_list(&sensors[j]);
+
+			DBG("name = %s, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
+                 sensors[j].name, sensors[j].index, sensors[j].par1, sensors[j].par2, \
+                 sensors[j].low_limit, sensors[j].high_limit);
+
+			j++;
+		}
+	}
+
+	fclose(fp);
+
+#ifdef DEBUG
+	exit(1);
+#endif
+
+	sio_enter(chip_model);
+	if (strncmp("AST", chip_model, 3) == 0) {
+		sio_ilpc2ahb_setup();
+		init_peci();
+	} else {
 		/* Read HW monitor base address */
 		hw_base_addr = read_hwmon_base_address();
 	}
-
 	sio_exit();
 
 	/* Disable the buffer of STDOUT */
@@ -186,13 +219,15 @@ int main(int argc, unsigned char *argv[])
          * value. */
 		for (j = 0; j < count; j++) {
 			if (strncmp("AST", chip_model, 3) == 0) {
-				b = read_ast_sensor(sensors[j].type, sensors[j].index, \
-                                    sensors[j].par1, sensors[j].par2);
+				DBG("j = %d, type = %d, index = %d, bank = %d, par1 = %f, par2 = %f\n",
+                     j, sensors[j].type, sensors[j].index, \
+                     sensors[j].par1, sensors[j].par2);
+
+				b = read_ast_sensor[sensors[j].type](sensors[j].index, sensors[j].par1);
 			} else {
-				DBG("\nhw_base_addr = %x, j = %d, type = %d, index = %d,\
-						bank = %d, par1 = %f, par2 = %f\n", hw_base_addr, j, \
-						sensors[j].type, sensors[j].index, sensors[j].bank, \
-						sensors[j].par1, sensors[j].par2);
+				DBG("hw_base_addr = %x, j = %d, type = %d, index = %d, bank = %d, par1 = %f, par2 = %f\n", 
+                     hw_base_addr, j, sensors[j].type, sensors[j].index, \
+                     sensors[j].bank, sensors[j].par1, sensors[j].par2);
 
 				if (strncmp("NCT", chip_model, 3) == 0) {
 					bank_select(hw_base_addr, sensors[j].bank); /* Set Bank */
@@ -208,17 +243,13 @@ int main(int argc, unsigned char *argv[])
 					plus = 5;
 				}
 
-				b = read_sio_sensor1[sensors[j].type](hw_base_addr, \
-                                                      sensors[j].index, \
-													  plus, \
-                                                      sensors[j].par1, \
-                                                      sensors[j].par2);
+				b = read_sio_sensor[sensors[j].type](hw_base_addr, \
+                                                     sensors[j].index, \
+                                                     plus, \
+                                                     sensors[j].par1, \
+                                                     sensors[j].par2);
 				DBG("b = %f\n", b);
 			}
-
-#ifdef DEBUG
-			continue;
-#endif
 
 			/* Show Sensor name */
 			asprintf(&buf, "tput cup %d 0", j + 2);
@@ -261,8 +292,8 @@ int main(int argc, unsigned char *argv[])
 			system(buf);
 			free(buf);
 
-			if ((sensors[j].min >= sensors[j].low) && \
-                (sensors[j].max <= sensors[j].up)) {
+			if ((sensors[j].min >= sensors[j].low_limit) && \
+                (sensors[j].max <= sensors[j].high_limit)) {
 				printf("PASS");
 			} else {
 				printf("Fail!!");
@@ -278,94 +309,115 @@ int main(int argc, unsigned char *argv[])
 	return Result;
 }
 
-unsigned int read_reg(unsigned int lr, unsigned int hr)
+unsigned int sio_ilpc2ahb_read(unsigned int lr, unsigned int hr)
 {
 	unsigned int b;
 	unsigned int mod;
-
-	/* Set Length to 1 Byte */
-	b = sio_read(0xF8);
-	b &= ~(0x03);
-	sio_write(0xF8, b);
 
 	mod = lr % 4; /* Address must be multiple of 4 */
 	lr = lr - mod;
 
-	b = hr >> 8; /* Set address */
-	sio_write(0xF0, b);
-	b = hr & 0x00FF;
-	sio_write(0xF1, b);
-	b = lr >> 8;
-	sio_write(0xF2, b);
-	b = lr & 0x00FF;
-	sio_write(0xF3, b);
+	/* 
+	 * Setup address
+	 * 0xF0: SIO iLPC2AHB address bit[31:24]   
+	 * 0xF1: SIO iLPC2AHB address bit[23:16]   
+	 * 0xF2: SIO iLPC2AHB address bit[15:8]   
+	 * 0xF3: SIO iLPC2AHB address bit[7:0]
+	 */
+	sio_write(0xF0, hr >> 8);
+	sio_write(0xF1, hr & 0xFF);
+	sio_write(0xF2, lr >> 8);
+	sio_write(0xF3, lr & 0xFF);
 
-	sio_read(0xFE); /* Read Trigger */
+	/* Read to trigger SIO iLPC2AHB write command */
+	sio_read(0xFE);
 
+	/*
+	 * Read data
+	 * 0xF4: SIO iLPC2AHB data bit[31:24]   
+	 * 0xF5: SIO iLPC2AHB data bit[23:16]   
+	 * 0xF6: SIO iLPC2AHB data bit[15:8]   
+	 * 0xF7: SIO iLPC2AHB data bit[7:0]
+	 */
 	b = sio_read(0xF7 - mod); /* Get the value */
+
 	return b;
 }
 
-void write_reg(unsigned char val_w, unsigned int lw, unsigned int hw)
+void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 {
 	unsigned int b;
 	unsigned int mod;
 
-	/* Set Length to 1 Byte */
-	b = sio_read(0xF8);
-	b &= ~(0x03);
-	sio_write(0xF8, b);
+	/* 
+	 * Setup address
+	 * 0xF0: SIO iLPC2AHB address bit[31:24]   
+	 * 0xF1: SIO iLPC2AHB address bit[23:16]   
+	 * 0xF2: SIO iLPC2AHB address bit[15:8]   
+	 * 0xF3: SIO iLPC2AHB address bit[7:0]
+	 */
+	sio_write(0xF0, hw >> 8);
+	sio_write(0xF1, hw & 0xFF);
+	sio_write(0xF2, lw >> 8);
+	sio_write(0xF3, lw & 0xFF);
 
-	b = hw >> 8; /* Set address */
-	sio_write(0xF0, b);
-	b = hw & 0x00FF;
-	sio_write(0xF1, b);
-	b = lw >> 8;
-	sio_write(0xF2, b);
-	b = lw & 0x00FF;
-	sio_write(0xF3, b);
+	/*
+	 * Write data
+	 * 0xF4: SIO iLPC2AHB data bit[31:24]   
+	 * 0xF5: SIO iLPC2AHB data bit[23:16]   
+	 * 0xF6: SIO iLPC2AHB data bit[15:8]   
+	 * 0xF7: SIO iLPC2AHB data bit[7:0]
+	 */
+	sio_write(0xF7, val_w);
 
-	sio_write(0xF7, val_w); /* Send the value */
-
-	sio_write(0xFE, 0xCF); /* Write Trigger */
+	/* Write 0xCF to trigger SIO iLPC2AHB write command */
+	sio_write(0xFE, 0xCF);
 }
 
-void init_PECI(void)
+void sio_ilpc2ahb_setup(void)
 {
-	unsigned int data;
+	unsigned int b;
 
 	/* select logical device iLPC2AHB */
 	sio_select(SIO_LPC2AHB_LDN);
 	/* enable iLPC2AHB */
 	sio_logical_device_enable(SIO_LPC2AHB_EN);
-	/* sio_lpc2ahb_enable(); */
+	/* Set Length to 1 Byte */
+	b = sio_read(0xF8);
+	b &= ~(0x03);
+	sio_write(0xF8, b);
+}
+
+void init_peci(void)
+{
+	unsigned int data;
 
 	/* Enable PECI, Negotiation Timing = 0x40, Clock divider = 2 */
-	write_reg(0x02, LOW_PECI_BASE_ADDR + 0x00, HIGH_PECI_BASE_ADDR);
-	write_reg(0x40, LOW_PECI_BASE_ADDR + 0x01, HIGH_PECI_BASE_ADDR);
-	write_reg(0x01, LOW_PECI_BASE_ADDR + 0x02, HIGH_PECI_BASE_ADDR);
-	write_reg(0x00, LOW_PECI_BASE_ADDR + 0x03, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x02, LOW_PECI_BASE_ADDR + 0x00, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x40, LOW_PECI_BASE_ADDR + 0x01, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x01, LOW_PECI_BASE_ADDR + 0x02, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x00, LOW_PECI_BASE_ADDR + 0x03, HIGH_PECI_BASE_ADDR);
 
 	/* Read length = 2, Write length = 1, CPU address = 0x30 */
-	write_reg(0x30, LOW_PECI_BASE_ADDR + 0x04, HIGH_PECI_BASE_ADDR);
-	write_reg(0x01, LOW_PECI_BASE_ADDR + 0x05, HIGH_PECI_BASE_ADDR);
-	write_reg(0x02, LOW_PECI_BASE_ADDR + 0x06, HIGH_PECI_BASE_ADDR);
-	write_reg(0x00, LOW_PECI_BASE_ADDR + 0x07, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x30, LOW_PECI_BASE_ADDR + 0x04, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x01, LOW_PECI_BASE_ADDR + 0x05, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x02, LOW_PECI_BASE_ADDR + 0x06, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x00, LOW_PECI_BASE_ADDR + 0x07, HIGH_PECI_BASE_ADDR);
 
 	/* Write Command Code (0x01) into write Register */
-	write_reg(0x01, LOW_PECI_BASE_ADDR + 0x0C, HIGH_PECI_BASE_ADDR);
-	write_reg(0x00, LOW_PECI_BASE_ADDR + 0x0D, HIGH_PECI_BASE_ADDR);
-	write_reg(0x00, LOW_PECI_BASE_ADDR + 0x0E, HIGH_PECI_BASE_ADDR);
-	write_reg(0x00, LOW_PECI_BASE_ADDR + 0x0F, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x01, LOW_PECI_BASE_ADDR + 0x0C, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x00, LOW_PECI_BASE_ADDR + 0x0D, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x00, LOW_PECI_BASE_ADDR + 0x0E, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x00, LOW_PECI_BASE_ADDR + 0x0F, HIGH_PECI_BASE_ADDR);
 
 	/* Fire Engine */
-	write_reg(0x01, LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR);
+	sio_ilpc2ahb_write(0x01, LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR);
 
 	/* Check the status is Idle or Busy */
 	data = 2;
 	while (data != 0) {
 		usleep(10000);
-		data = read_reg(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR);
+		data = sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR);
 		data &= 0x02;
 	}
 }
@@ -403,7 +455,7 @@ void bank_select(unsigned int address, unsigned int bank)
 	data = inb_p(address + plus + 1);
 
 	if (strcmp("NCT6776F", chip_model) == 0) {
-		data &= ~(7); /* Clear bit0~2 */
+		data &= ~(0x7); /* Clear bit0~2 */
 	} else if (strcmp("NCT6779D", chip_model) == 0) {
 		data &= ~(0x0F); /* Clear bit0~3 */
 	}
@@ -412,112 +464,42 @@ void bank_select(unsigned int address, unsigned int bank)
 	outb_p(data, address + plus + 1);
 }
 
-void Type_list(unsigned int *type, float par1, float par2, float up)
+void type_list(struct sensor *sensors)
 {
-	if (par2 == 0) {
-		if (up < 20) {
-			*type = 2;
-		} else if (up < 110 && up >= 20) {
-			*type = 0;
+	if (sensors->par2 == 0) {
+		if (sensors->high_limit < 20) {
+			sensors->type = 2;
+		} else if (sensors->high_limit < 110 && sensors->high_limit >= 20) {
+			sensors->type = 0;
 		} else {
-			*type = 1;
+			sensors->type = 1;
 		}
 	} else {
-		*type = 3;
+		sensors->type = 3;
 	}
 }
 
-float read_ast_sensor(unsigned int type, unsigned int index, \
-                      float par1, float par2)
+float read_temperature(unsigned int address, unsigned int index, int plus, ...)
 {
-	unsigned int data_l = 0;
-	unsigned int data_h = 0;
-	unsigned int data = 0;
-	unsigned int low_addr;
-	unsigned int high_addr;
-	int Hz = 100000;
-	float result = 0;
+	float par1;
+	va_list args;
 
-	if (type == 0) { /* Type=0, read Temperature */
-		low_addr = LOW_DATA_BASE_ADDR + index;
-		high_addr = HIGH_DATA_BASE_ADDR;
+	va_start(args, plus);
+	par1 = va_arg(args, double);
+	va_end(args);
 
-		data_l = read_reg(low_addr, high_addr);
-		data_h = read_reg(low_addr + 1, high_addr);
-		data = data_l | (data_h << 8);
-		result = data;
-	}
-
-	if (type == 1) { /* Type=1, read Temperature via I2C */
-		low_addr = LOW_I2C_BASE_ADDR;
-		high_addr = HIGH_I2C_BASE_ADDR;
-
-		/* Write I2C Channel 7 clock to 100KHz */
-		write_reg((Hz & 0xFF), low_addr + 0x48, high_addr);
-		write_reg(((Hz >> 8) & 0xFF), low_addr + 0x49, high_addr);
-		write_reg(((Hz >> 16) & 0xFF), low_addr + 0x4A, high_addr);
-		write_reg(((Hz >> 24) & 0xFF), low_addr + 0x4B, high_addr);
-
-		/* Set I2C to read, Device Address and Channel number */
-		write_reg(0x07, low_addr + 0x54, high_addr);
-		write_reg(index, low_addr + 0x55, high_addr);
-		write_reg(0x00, low_addr + 0x56, high_addr);
-		write_reg(0x00, low_addr + 0x57, high_addr);
-
-		data = read_reg(low_addr + 0x00, high_addr); /* Enabled I2C Channel 7 */
-		data |= 0x40;
-		write_reg(data, low_addr + 0x00, high_addr);
-
-		/* Fire to Engine */
-		data = read_reg(low_addr + 0x5C, high_addr);
-		data |= 0x01;
-		write_reg(data, low_addr + 0x5C, high_addr);
-
-		usleep(1000000); /* Need the wait time for next reading */
-
-		data_l = 2; /* Check the status is Idle or Busy */
-		while (data_l != 0) {
-			usleep(10000);
-			data_l = read_reg(low_addr + 0x5C, high_addr);
-			data_l &= 0x02;
-		}
-
-		data =  read_reg(LOW_DATA_BASE_ADDR, HIGH_DATA_BASE_ADDR); /* Read I2C data */
-		result = data;
-	}
-
-	if (type == 2) { /* Type=2, read fan */
-		low_addr = LOW_TACHO_BASE_ADDR + index;
-		high_addr = HIGH_TACHO_BASE_ADDR;
-
-		data_l = read_reg(low_addr, high_addr);
-		data_h = read_reg(low_addr + 1, high_addr);
-		data = data_l | (data_h << 8);
-		result = data;
-	}
-
-	if (type == 3) { /* Type=3, read Voltage. */
-		low_addr = LOW_ADC_BASE_ADDR + index;
-		high_addr = HIGH_ADC_BASE_ADDR;
-		data_l = read_reg(low_addr, high_addr);
-		data_h = read_reg(low_addr + 1, high_addr);
-		data_h &= 0x03;
-		data = data_l | (data_h << 8);
-		/* Ask BIOS to get the ratio */
-		result = (((float) data) * ((float) par1) * 25 / 1023 / 100);
-	}
-
-	return result;
-}
-
-float read_temperature(unsigned int address, unsigned int index, int plus, float par1, float par2)
-{
 	return (sio_read_reg(index, address + plus) + par1);
 }
 
-float read_fan_speed(unsigned int address, unsigned int index, int plus, float par1, float par2)
+float read_fan_speed(unsigned int address, unsigned int index, int plus, ...)
 {
 	int data;
+	float par1;
+	va_list args;
+
+	va_start(args, plus);
+	par1 = va_arg(args, double);
+	va_end(args);
 
 	data = sio_read_reg(index, address + plus);
 	data = data << 8;
@@ -533,16 +515,22 @@ float read_fan_speed(unsigned int address, unsigned int index, int plus, float p
 	return (data == par1) ? 0 : data;
 }
 
-float read_voltage1(unsigned int address, unsigned int index, int plus, float par1, float par2)
+float read_voltage1(unsigned int address, unsigned int index, int plus, ...)
 {
 	return ((float) sio_read_reg(index, address + plus) * 0.008);
 }
 
-float read_voltage2(unsigned int address, unsigned int index, int plus, \
-                    float par1, float par2)
+float read_voltage2(unsigned int address, unsigned int index, int plus, ...)
 {
 	int data;
-	float result;
+	float result, par1, par2;
+	va_list args;
+
+	va_start(args, plus);
+	par1 = va_arg(args, double);
+	par2 = va_arg(args, double);
+	va_end(args);
+
 	data = sio_read_reg(index, address + plus);
 	DBG("address = %x, index = %d, par1 = %f, par2 = %f, data = %d\n", \
          address, index, par1, par2, data);
@@ -551,28 +539,359 @@ float read_voltage2(unsigned int address, unsigned int index, int plus, \
 	return result;
 }
 
-float read_ast_temperature(void)
+float read_ast_temperature_peci(unsigned int index, ...)
 {
+	unsigned int data_l = 0;
+	unsigned int data_h = 0;
+	unsigned int data = 0;
+	unsigned int low_addr;
+	unsigned int high_addr;
+
+	low_addr = LOW_DATA_BASE_ADDR + index;
+	high_addr = HIGH_DATA_BASE_ADDR;
+
+	data_l = sio_ilpc2ahb_read(low_addr, high_addr);
+	data_h = sio_ilpc2ahb_read(low_addr + 1, high_addr);
+	data = data_l | (data_h << 8);
+
+	return ((float) data);
+}
+
+float read_ast_temperature_i2c(unsigned int index, ...)
+{
+	unsigned int data_l = 0;
+	unsigned int data_h = 0;
+	unsigned int data = 0;
+	unsigned int low_addr;
+	unsigned int high_addr;
 	float result;
+	int Hz = 100000;
+
+	low_addr = LOW_I2C_BASE_ADDR;
+	high_addr = HIGH_I2C_BASE_ADDR;
+
+	/* Write I2C Channel 7 clock to 100KHz */
+	sio_ilpc2ahb_write((Hz & 0xFF), low_addr + 0x48, high_addr);
+	sio_ilpc2ahb_write(((Hz >> 8) & 0xFF), low_addr + 0x49, high_addr);
+	sio_ilpc2ahb_write(((Hz >> 16) & 0xFF), low_addr + 0x4A, high_addr);
+	sio_ilpc2ahb_write(((Hz >> 24) & 0xFF), low_addr + 0x4B, high_addr);
+
+	/* Set I2C to read, Device Address and Channel number */
+	sio_ilpc2ahb_write(0x07, low_addr + 0x54, high_addr);
+	sio_ilpc2ahb_write(index, low_addr + 0x55, high_addr);
+	sio_ilpc2ahb_write(0x00, low_addr + 0x56, high_addr);
+	sio_ilpc2ahb_write(0x00, low_addr + 0x57, high_addr);
+		
+	/* Enabled I2C Channel 7 */
+	data = sio_ilpc2ahb_read(low_addr + 0x00, high_addr);
+	data |= 0x40;
+	sio_ilpc2ahb_write(data, low_addr + 0x00, high_addr);
+
+	/* Fire to Engine */
+	data = sio_ilpc2ahb_read(low_addr + 0x5C, high_addr);
+	data |= 0x01;
+	sio_ilpc2ahb_write(data, low_addr + 0x5C, high_addr);
+
+	usleep(1000000); /* Need the wait time for next reading */
+
+	data_l = 2; /* Check the status is Idle or Busy */
+	while (data_l != 0) {
+		usleep(10000);
+		data_l = sio_ilpc2ahb_read(low_addr + 0x5C, high_addr);
+		data_l &= 0x02;
+	}
+
+	/* Read I2C data */
+	result = (sio_ilpc2ahb_read(LOW_DATA_BASE_ADDR, HIGH_DATA_BASE_ADDR));
+
 	return result;
 }
 
-float read_ast_fan_speed(void)
+float read_ast_fan(unsigned int index, ...)
 {
-	float result;
+	unsigned int data_l = 0;
+	unsigned int data_h = 0;
+	unsigned int data = 0;
+	unsigned int low_addr;
+	unsigned int high_addr;
+
+	low_addr = LOW_TACHO_BASE_ADDR + index;
+	high_addr = HIGH_TACHO_BASE_ADDR;
+
+	data_l = sio_ilpc2ahb_read(low_addr, high_addr);
+	data_h = sio_ilpc2ahb_read(low_addr + 1, high_addr);
+	data = data_l | (data_h << 8);
+
+	return ((float) data);
+}
+
+float read_ast_voltage(unsigned int index, ...)
+{
+	unsigned int data_l = 0;
+	unsigned int data_h = 0;
+	unsigned int data = 0;
+	unsigned int low_addr;
+	unsigned int high_addr;
+	float par1, result;
+	va_list args;
+
+	low_addr = LOW_ADC_BASE_ADDR + index;
+	high_addr = HIGH_ADC_BASE_ADDR;
+	data_l = sio_ilpc2ahb_read(low_addr, high_addr);
+	data_h = sio_ilpc2ahb_read(low_addr + 1, high_addr);
+	data_h &= 0x03;
+	data = data_l | (data_h << 8);
+
+	va_start(args, index);
+	par1 = va_arg(args, double);
+	va_end(args);
+
+	/* Ask BIOS to get the ratio */
+	result = (((float) data) * ((float) par1) * 25 / 1023 / 100);
+
 	return result;
 }
 
-float read_ast_voltage1(void)
+void pin_list(char *chip_model, struct sensor *sensors)
 {
-	float result;
-	return result;
-}
+	int pin = sensors->index;
 
-float read_ast_voltage2(void)
-{
-	float result;
-	return result;
+	if (strcmp("NCT6776D", chip_model) == 0 || strcmp("NCT6776F", chip_model) == 0) {
+		switch(pin) {
+			case 1:
+				sensors->index = 0x23;
+				sensors->bank = 0;
+				break;
+			case 46:
+				sensors->index = 0x50;
+				sensors->bank = 5;
+				break;
+			case 99:
+				sensors->index = 0x51;
+				sensors->bank = 5;
+				break;
+			case 103:
+				sensors->index = 0x25;
+				sensors->bank = 0;
+				break;
+			case 104:
+				sensors->index = 0x24;
+				sensors->bank = 0;
+				break;
+			case 105:
+				sensors->index = 0x21;
+				sensors->bank = 0;
+				break;
+			case 106:
+				sensors->index = 0x22;
+				sensors->bank = 0;
+				break;
+			case 107:
+				sensors->index = 0x20;
+				sensors->bank = 0;
+				break;
+			case 109:
+				sensors->index = 0x26;
+				sensors->bank = 0;
+				break;
+			case 124:
+				sensors->index = 0x58;
+				sensors->bank = 6;
+				break;
+			case 126:
+				sensors->index = 0x56;
+				sensors->bank = 6;
+				break;
+			case 110:
+				sensors->index = 0x50;
+				sensors->bank = 1;
+				break;
+			case 111:
+				sensors->index = 0x2B;
+				sensors->bank = 6;
+				break;
+		}
+	} else if (strcmp("NCT6779D", chip_model) == 0) {
+		switch(pin) {
+			case 3:
+				sensors->index = 0xC4;
+				sensors->bank = 4;
+				break;
+			case 4:
+				sensors->index = 0xC6;
+				sensors->bank = 4;
+				break;
+			case 99:
+				sensors->index = 0x88;
+				sensors->bank = 4;
+				break;
+			case 104:
+				sensors->index = 0x84;
+				sensors->bank = 4;
+				break;
+			case 105:
+				sensors->index = 0x81;
+				sensors->bank = 4;
+				break;
+			case 106:
+				sensors->index = 0x8C;
+				sensors->bank = 4;
+				break;
+			case 107:
+				sensors->index = 0x8D;
+				sensors->bank = 4;
+				break;
+			case 109:
+				sensors->index = 0x80;
+				sensors->bank = 4;
+				break;
+			case 111:
+				sensors->index = 0x86;
+				sensors->bank = 4;
+				break;
+			case 112:
+				sensors->index = 0x20;
+				sensors->bank = 7;
+				break;
+			case 113:
+				sensors->index = 0x90;
+				sensors->bank = 4;
+				break;
+			case 114:
+				sensors->index = 0x8A;
+				sensors->bank = 4;
+				break;
+			case 115:
+				sensors->index = 0x8B;
+				sensors->bank = 4;
+				break;
+			case 116:
+				sensors->index = 0x8E;
+				sensors->bank = 4;
+				break;
+			case 124:
+				sensors->index = 0xC2;
+				sensors->bank = 4;
+				break;
+			case 126:
+				sensors->index = 0xC0;
+				sensors->bank = 4;
+				break;
+		}
+	} else if (strncmp("F718", chip_model, 4) == 0) {
+		sensors->bank = 0;
+		switch(pin) {
+			case 21:
+				sensors->index = 0xA0;
+				break;
+			case 23:
+				sensors->index = 0xB0;
+				break;
+			case 25:
+				sensors->index = 0xC0;
+				break;
+			case 89:
+				sensors->index = 0x76;
+				break;
+			case 90:
+				sensors->index = 0x74;
+				break;
+			case 91:
+				sensors->index = 0x72;
+				break;
+			case 93:
+				sensors->index = 0x26;
+				break;
+			case 94:
+				sensors->index = 0x25;
+				break;
+			case 95:
+				sensors->index = 0x24;
+				break;
+			case 96:
+				sensors->index = 0x23;
+				break;
+			case 97:
+				sensors->index = 0x22;
+				break;
+			case 98:
+				sensors->index = 0x21;
+				break;
+		}
+
+		if (strncmp("F7186", chip_model, 5)  ==  0) {
+			switch(pin) {
+				case 4:
+				case 37:
+					sensors->index = 0x20;
+					break;
+				case 58:
+					sensors->index = 0x7E;
+					break;
+				case 68:
+					sensors->index = 0x27;
+					break;
+				case 86:
+					sensors->index = 0x28;
+					break;
+			}
+		}
+
+		if (strcmp("F71889AD", chip_model)  ==  0) {
+			switch(pin) {
+				case 1:
+				case 35:
+					sensors->index = 0x20;
+					break;
+				case 44:
+					sensors->index = 0x78;
+					break;
+				case 65:
+					sensors->index = 0x27;
+					break;
+				case 82:
+					sensors->index = 0x28;
+					break;
+			}
+		}
+	} else if (strcmp("AST1300", chip_model)  ==  0) {
+		if (strcmp(sensors->pin_name, "AA21") == 0) /* PECI */
+			sensors->index = 0x50;
+		else if (strcmp(sensors->pin_name, "D1") == 0) { /* I2C */
+			sensors->index = 0x90;
+		}
+		/* ADC0 ~ ADC11 */
+		else if (strcmp(sensors->pin_name, "Y3") == 0)
+			sensors->index = 0x0C;
+		else if (strcmp(sensors->pin_name, "W4") == 0)
+			sensors->index = 0x08;
+		else if (strcmp(sensors->pin_name, "AA2") == 0)
+			sensors->index = 0x10;
+		else if (strcmp(sensors->pin_name, "L5") == 0)
+			sensors->index = 0x08;
+		else if (strcmp(sensors->pin_name, "L4") == 0)
+			sensors->index = 0x0C;
+		else if (strcmp(sensors->pin_name, "L3") == 0)
+			sensors->index = 0x10;
+		else if (strcmp(sensors->pin_name, "L2") == 0)
+			sensors->index = 0x14;
+		else if (strcmp(sensors->pin_name, "L1") == 0)
+			sensors->index = 0x18;
+		else if (strcmp(sensors->pin_name, "M5") == 0)
+			sensors->index = 0x1C;
+		else if (strcmp(sensors->pin_name, "M4") == 0)
+			sensors->index = 0x20;
+		else if (strcmp(sensors->pin_name, "M3") == 0)
+			sensors->index = 0x24;
+		else if (strcmp(sensors->pin_name, "M2") == 0)
+			sensors->index = 0x28;
+		else if (strcmp(sensors->pin_name, "M1") == 0)
+			sensors->index = 0x2C;
+		else if (strcmp(sensors->pin_name, "N5") == 0)
+			sensors->index = 0x30;
+		else if (strcmp(sensors->pin_name, "N4") == 0)
+			sensors->index = 0x34;
+	}
 }
 
 /* If parameter is wrong, it will show this message */

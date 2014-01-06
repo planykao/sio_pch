@@ -1,0 +1,59 @@
+DIRECTORY STRUCTURE
+================================================================================
+bypass.c - gpio bypass test program, so far, it's a empty file.
+conf -- put all configuration files here.
+      |-- bypass
+      |-- hwmon
+      |-- loopback
+gpio-loopback.c - gpio loopback test program.
+hwm.conf - hardware monitor configuration file, it will move to conf/hwmon/ 
+           when hardware monitor test program gets ready.
+hwmon.c - hardware monitor test program.
+Makefile - make file.
+pchlib.c - library for PCH.
+pchlib.h - header file for PCH library.
+pin_list.c - remap pin to register.
+pin_list.h - header file for pin_list.c.
+README - this file.
+release - release directory
+script -- script directory
+        |-- bypass
+        |-- hwmon
+        |-- gpio
+siolib.c - library for SIO.
+siolib.h - header file for SIO library.
+sitest.h - global header file.
+
+
+HOW TO BUILD TEST PROGRAM
+================================================================================
+1. Build all test program.
+    Just execute "make" command, then it will build gpio-loopback and hwmon test 
+    program and copy the script/configuration files/test program to release 
+    directory.
+
+    $ make
+
+2. Build single target.
+    It also support build single test program, for example, execut "make gpio", 
+	it will build gpio-loopback test program.
+
+    $ make gpio
+    or
+    $ make hwmon
+    or
+    $ make release
+	
+3. DEBUG
+    Developers can use DBG(a macro) to add debugging messages. The debugging 
+    messages only show up when you enable DEBUG flag. By default, DEBUG flag 
+    is disable.
+
+	$ make gpio DEBUG=1
+
+4. Clean
+    It will remove everything in release directory and remove all test program 
+    in current directory.
+
+    $ make clean
+

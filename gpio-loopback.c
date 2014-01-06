@@ -164,8 +164,8 @@ int main(int argc, char *argv[])
 	fscanf(fp, "%s %x", str, &base_addr);
 
 	if (strcmp("SIO", str) == 0) {
-		EFER = 0x4E;
-		EFDR = 0x4F;
+		EFER = base_addr;
+		EFDR = base_addr + 1;
 	}
 
 	DBG("str = %s, base_addr = %x, EFER = %x, EFDR = %x\n", \

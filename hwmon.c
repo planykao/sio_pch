@@ -36,7 +36,7 @@ void sio_ilpc2ahb_setup(void);
 void init_peci(void);
 void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
 
-unsigned int sio_ilpc2ahb_read(unsigned int lr, unsigned int hr);
+unsigned int sio_ilpc2ahb_read(int lr, int hr);
 unsigned int read_hwmon_base_address(void);
 
 float read_temperature(unsigned int address, unsigned int index, int plus, ...);
@@ -112,14 +112,20 @@ int main(int argc, unsigned char *argv[])
 	}
 	
 	/* If the parameter is wrong, use the usage message */
-	if (argc != 2) {
+	if (argc != 3) {
 		usage();
 		exit(-1);
 	}
 
-	time = atoi(argv[1]);
+	time = atoi(argv[2]);
 
-	fp = fopen("hwm.conf", "r");
+	fp = fopen(argv[1], "r");
+
+	if ( fp == NULL) {
+		printf("Fail to open <%s>, please check the file name is correct.\n", \
+                argv[1]);
+		exit(-1);
+	}
 
 	/* Skip the header */
 	fscanf(fp, "%*[^\n]\n", NULL);
@@ -158,10 +164,10 @@ int main(int argc, unsigned char *argv[])
                  sensors[j].par2, sensors[j].low_limit, sensors[j].high_limit);
 
 			pin_list(chip_model, &sensors[j]);
-			type_list(&sensors[j]);
+			/* type_list(&sensors[j]); */
 
-			DBG("name = %s, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
-                 sensors[j].name, sensors[j].index, sensors[j].par1, \
+			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
+                 sensors[j].name, sensors[j].type, sensors[j].index, sensors[j].par1, \
                  sensors[j].par2, sensors[j].low_limit, sensors[j].high_limit);
 
 			j++;
@@ -180,8 +186,8 @@ int main(int argc, unsigned char *argv[])
 			pin_list(chip_model, &sensors[j]);
 			type_list(&sensors[j]);
 
-			DBG("name = %s, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
-                 sensors[j].name, sensors[j].index, sensors[j].par1, sensors[j].par2, \
+			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f\n", \
+                 sensors[j].name, sensors[j].type, sensors[j].index, sensors[j].par1, sensors[j].par2, \
                  sensors[j].low_limit, sensors[j].high_limit);
 
 			j++;
@@ -191,7 +197,7 @@ int main(int argc, unsigned char *argv[])
 	fclose(fp);
 
 #ifdef DEBUG
-	exit(1);
+//	exit(1);
 #endif
 
 	sio_enter(chip_model);
@@ -201,29 +207,33 @@ int main(int argc, unsigned char *argv[])
 	} else {
 		/* Read HW monitor base address */
 		hw_base_addr = read_hwmon_base_address();
+		sio_exit();
 	}
-	sio_exit();
 
 	/* Disable the buffer of STDOUT */
 	setbuf(stdout, NULL);
 
 	/* The loop for Test time */
 	for (i = 0; i < time; i++) {
+
+#ifndef DEBUG
 		system("clear");
 		printf("Sensors                       Current     Minimum     Maximum     Status\n");
 		printf("--------------------------------------------------------------------------");
+#endif
 
 		/* Read the sensors and show the current value and record the min/max 
          * value. */
 		for (j = 0; j < count; j++) {
 			if (strncmp("AST", chip_model, 3) == 0) {
-				DBG("j = %d, type = %d, index = %d, bank = %d, par1 = %f, par2 = %f\n",
+				DBG("j = %d, type = %d, index = %x, par1 = %f, par2 = %f\n",
                      j, sensors[j].type, sensors[j].index, \
                      sensors[j].par1, sensors[j].par2);
 
 				b = read_ast_sensor[sensors[j].type](sensors[j].index, sensors[j].par1);
+				DBG("b = %f\n", b);
 			} else {
-				DBG("hw_base_addr = %x, j = %d, type = %d, index = %d, bank = %d, par1 = %f, par2 = %f\n", 
+				DBG("hw_base_addr = %x, j = %d, type = %d, index = %x, bank = %d, par1 = %f, par2 = %f\n", 
                      hw_base_addr, j, sensors[j].type, sensors[j].index, \
                      sensors[j].bank, sensors[j].par1, sensors[j].par2);
 
@@ -249,6 +259,7 @@ int main(int argc, unsigned char *argv[])
 				DBG("b = %f\n", b);
 			}
 
+#ifndef DEBUG
 			/* Show Sensor name */
 			asprintf(&buf, "tput cup %d 0", j + 2);
 			system(buf);
@@ -297,17 +308,21 @@ int main(int argc, unsigned char *argv[])
 				printf("Fail!!");
 				result = 1;
 			}
+#endif
 		}
 
 		sleep(1);
 	}
+
+	if (strncmp("AST", chip_model, 3) == 0)
+		sio_exit();
 
 	printf("\n\n");
 
 	return result;
 }
 
-unsigned int sio_ilpc2ahb_read(unsigned int lr, unsigned int hr)
+unsigned int sio_ilpc2ahb_read(int lr, int hr)
 {
 	unsigned int b;
 	unsigned int mod;
@@ -339,6 +354,7 @@ unsigned int sio_ilpc2ahb_read(unsigned int lr, unsigned int hr)
 	 */
 	b = sio_read(0xF7 - mod); /* Get the value */
 
+	DBG("b = %x\n", b);
 	return b;
 }
 
@@ -542,11 +558,13 @@ float read_ast_temperature_peci(unsigned int index, ...)
 	unsigned int data_l = 0;
 	unsigned int data_h = 0;
 	unsigned int data = 0;
-	unsigned int low_addr;
-	unsigned int high_addr;
+	int low_addr;
+	int high_addr;
 
 	low_addr = LOW_DATA_BASE_ADDR + index;
 	high_addr = HIGH_DATA_BASE_ADDR;
+
+	DBG("high_addr = %x, low_addr = %x\n", high_addr, low_addr);
 
 	data_l = sio_ilpc2ahb_read(low_addr, high_addr);
 	data_h = sio_ilpc2ahb_read(low_addr + 1, high_addr);
@@ -560,8 +578,8 @@ float read_ast_temperature_i2c(unsigned int index, ...)
 	unsigned int data_l = 0;
 	unsigned int data_h = 0;
 	unsigned int data = 0;
-	unsigned int low_addr;
-	unsigned int high_addr;
+	int low_addr;
+	int high_addr;
 	float result;
 	int Hz = 100000;
 
@@ -610,8 +628,8 @@ float read_ast_fan(unsigned int index, ...)
 	unsigned int data_l = 0;
 	unsigned int data_h = 0;
 	unsigned int data = 0;
-	unsigned int low_addr;
-	unsigned int high_addr;
+	int low_addr;
+	int high_addr;
 
 	low_addr = LOW_TACHO_BASE_ADDR + index;
 	high_addr = HIGH_TACHO_BASE_ADDR;
@@ -628,8 +646,8 @@ float read_ast_voltage(unsigned int index, ...)
 	unsigned int data_l = 0;
 	unsigned int data_h = 0;
 	unsigned int data = 0;
-	unsigned int low_addr;
-	unsigned int high_addr;
+	int low_addr;
+	int high_addr;
 	float par1, result;
 	va_list args;
 
@@ -856,44 +874,65 @@ void pin_list(char *chip_model, struct sensor *sensors)
 	} else if (strcmp("AST1300", chip_model)  ==  0) {
 		if (strcmp(sensors->pin_name, "AA21") == 0) { /* PECI */
 			sensors->index = 0x50;
+			sensors->type = 0;
 		} else if (strcmp(sensors->pin_name, "D1") == 0) { /* I2C */
-			if (strcmp(sensors->name, "Temp_BMC"))
+			sensors->type = 1;
+			if (strcmp(sensors->name, "Temp_BMC") == 0)
 				sensors->index = 0x90; /* device addres 0x90 */
-			else if (strcmp(sensors->name, "Temp_ENV"))
+			else if (strcmp(sensors->name, "Temp_ENV") == 0)
 				sensors->index = 0x98; /* device addres 0x90 */
-			else
+			else {
 				printf("%s: Error! Sensor name should be Temp_BMC or Temp_ENV\n");
-		/* ADC0 ~ ADC11 */
-		} else if (strcmp(sensors->pin_name, "Y3") == 0) {
+				exit(-1);
+			}
+		/* SYS_FAN1 ~ SYS_FAN3 */
+		} else if (strcmp(sensors->pin_name, "Y5") == 0) {
 			sensors->index = 0x0C;
-		} else if (strcmp(sensors->pin_name, "W4") == 0) {
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "V6") == 0) {
 			sensors->index = 0x08;
-		} else if (strcmp(sensors->pin_name, "AA2") == 0) {
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AA4") == 0) {
 			sensors->index = 0x10;
-		} else if (strcmp(sensors->pin_name, "L5") == 0) {
+			sensors->type = 2;
+		}
+		/* ADC0 ~ ADC11 */
+		else if (strcmp(sensors->pin_name, "L5") == 0) {
 			sensors->index = 0x08;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "L4") == 0) {
 			sensors->index = 0x0C;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "L3") == 0) {
 			sensors->index = 0x10;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "L2") == 0) {
 			sensors->index = 0x14;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "L1") == 0) {
 			sensors->index = 0x18;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "M5") == 0) {
 			sensors->index = 0x1C;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "M4") == 0) {
 			sensors->index = 0x20;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "M3") == 0) {
 			sensors->index = 0x24;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "M2") == 0) {
 			sensors->index = 0x28;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "M1") == 0) {
 			sensors->index = 0x2C;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "N5") == 0) {
 			sensors->index = 0x30;
+			sensors->type = 3;
 		} else if (strcmp(sensors->pin_name, "N4") == 0) {
 			sensors->index = 0x34;
+			sensors->type = 3;
 		}
 	}
 }
@@ -901,6 +940,6 @@ void pin_list(char *chip_model, struct sensor *sensors)
 /* If parameter is wrong, it will show this message */
 void usage(void)
 {
-	printf("Usage : Command [Value]\n"
-			" Value : Test time (Seconds)\n");
+	printf("Usage : hwmon <FILE NAME> <TIMES>\n"
+           " i.e: ./hwmon S0361.conf 10\n");
 }

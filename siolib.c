@@ -52,6 +52,7 @@ void sio_write_reg(int index, int address)
  * ldnum:     Logical Device Number */
 void sio_select(int ldnum)
 {
+	DBG("SIO_LDSEL_REG = %x, ldnum = %x\n", SIO_LDSEL_REG, ldnum);
 	outb_p(SIO_LDSEL_REG, EFER);
 	outb_p(ldnum, EFDR);
 }
@@ -80,6 +81,7 @@ void sio_logical_device_enable(int bit)
 	b = sio_read(SIO_ENABLE_REG);
 	DBG("read from CR30h = %x\n", b);
 	b |= (0x1 << bit); /* Set bitN to 1 to enable Logical Device */
+	DBG("write %x to CR30h\n", b);
 	/* Write the value to CR 30h of Logical device */
 	sio_write(SIO_ENABLE_REG, b);
 }

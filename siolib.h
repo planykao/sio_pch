@@ -47,7 +47,4 @@ int sio_read_reg(int index, int address);
 void sio_write_reg(int index, int address);
 void sio_select(int ldnum);
 
-int sio_astx300_read(unsigned int lr, unsigned int hr);
-void sio_astx300_write(unsigned char val_w, unsigned int lw, unsigned int hw);
-
 #endif

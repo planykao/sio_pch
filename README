@@ -12,8 +12,6 @@ hwmon.c - hardware monitor test program.
 Makefile - make file.
 pchlib.c - library for PCH.
 pchlib.h - header file for PCH library.
-pin_list.c - remap pin to register.
-pin_list.h - header file for pin_list.c.
 README - this file.
 release - release directory
 script -- script directory
@@ -56,4 +54,16 @@ HOW TO BUILD TEST PROGRAM
     in current directory.
 
     $ make clean
+
+
+KNOWN ISSUE
+================================================================================
+1. We use PECI and I2C to read temperature from AST1300, it's fine when we read 
+   temperature via PECI, but there is a problem when we read temperature via I2C
+   . I2C only has 2 pins, DATA and CLOCK. H/W use the same bus to connect 2
+   sensors, Temp_BMC and Temp_ENV, it means these two sensors use the same pin, 
+   and S/W use pin to decide which sensor we want to read, so S/W doesn't know 
+   which sensors should be read when it gets I2C pin from configuration file.
+
+   So far, before we find a better solution, it's hard-code in hwmon.c.
 

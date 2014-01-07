@@ -85,10 +85,8 @@ int main(int argc, unsigned char *argv[])
 	FILE *fp;
 	char *buf;
 	unsigned int hw_base_addr, base_addr, offset;
-	int i = 0, j = 0, count = 0;
-	int Result = 0, Size = 0, line_str = 2;
+	int i = 0, j = 0, count = 0, result = 0, time;
 	float b = 0;
-	unsigned char Time;
 
 	/* read sensor functions initialize, for SIO */
 	float (*read_sio_sensor[])(unsigned int address, unsigned int index, \
@@ -119,7 +117,7 @@ int main(int argc, unsigned char *argv[])
 		exit(-1);
 	}
 
-	Time = atoi(argv[1]);
+	time = atoi(argv[1]);
 
 	fp = fopen("hwm.conf", "r");
 
@@ -210,7 +208,7 @@ int main(int argc, unsigned char *argv[])
 	setbuf(stdout, NULL);
 
 	/* The loop for Test time */
-	for (i = 0; i < Time; i++) {
+	for (i = 0; i < time; i++) {
 		system("clear");
 		printf("Sensors                       Current     Minimum     Maximum     Status\n");
 		printf("--------------------------------------------------------------------------");
@@ -267,7 +265,7 @@ int main(int argc, unsigned char *argv[])
 			if (i == 0) {
 				sensors[j].max = b;
 				sensors[j].min = b;
-			} else {  /* Change the Min and Max value if the current value is */
+			} else { /* Change the Min and Max value if the current value is */
 				if (b > sensors[j].max) 
 					sensors[j].max = b;
 
@@ -297,7 +295,7 @@ int main(int argc, unsigned char *argv[])
 				printf("PASS");
 			} else {
 				printf("Fail!!");
-				Result = 1;
+				result = 1;
 			}
 		}
 
@@ -306,7 +304,7 @@ int main(int argc, unsigned char *argv[])
 
 	printf("\n\n");
 
-	return Result;
+	return result;
 }
 
 unsigned int sio_ilpc2ahb_read(unsigned int lr, unsigned int hr)
@@ -652,6 +650,7 @@ float read_ast_voltage(unsigned int index, ...)
 	return result;
 }
 
+/* TODO: need to find a better way to do this... */
 void pin_list(char *chip_model, struct sensor *sensors)
 {
 	int pin = sensors->index;
@@ -855,42 +854,47 @@ void pin_list(char *chip_model, struct sensor *sensors)
 			}
 		}
 	} else if (strcmp("AST1300", chip_model)  ==  0) {
-		if (strcmp(sensors->pin_name, "AA21") == 0) /* PECI */
+		if (strcmp(sensors->pin_name, "AA21") == 0) { /* PECI */
 			sensors->index = 0x50;
-		else if (strcmp(sensors->pin_name, "D1") == 0) { /* I2C */
-			sensors->index = 0x90;
-		}
+		} else if (strcmp(sensors->pin_name, "D1") == 0) { /* I2C */
+			if (strcmp(sensors->name, "Temp_BMC"))
+				sensors->index = 0x90; /* device addres 0x90 */
+			else if (strcmp(sensors->name, "Temp_ENV"))
+				sensors->index = 0x98; /* device addres 0x90 */
+			else
+				printf("%s: Error! Sensor name should be Temp_BMC or Temp_ENV\n");
 		/* ADC0 ~ ADC11 */
-		else if (strcmp(sensors->pin_name, "Y3") == 0)
+		} else if (strcmp(sensors->pin_name, "Y3") == 0) {
 			sensors->index = 0x0C;
-		else if (strcmp(sensors->pin_name, "W4") == 0)
+		} else if (strcmp(sensors->pin_name, "W4") == 0) {
 			sensors->index = 0x08;
-		else if (strcmp(sensors->pin_name, "AA2") == 0)
+		} else if (strcmp(sensors->pin_name, "AA2") == 0) {
 			sensors->index = 0x10;
-		else if (strcmp(sensors->pin_name, "L5") == 0)
+		} else if (strcmp(sensors->pin_name, "L5") == 0) {
 			sensors->index = 0x08;
-		else if (strcmp(sensors->pin_name, "L4") == 0)
+		} else if (strcmp(sensors->pin_name, "L4") == 0) {
 			sensors->index = 0x0C;
-		else if (strcmp(sensors->pin_name, "L3") == 0)
+		} else if (strcmp(sensors->pin_name, "L3") == 0) {
 			sensors->index = 0x10;
-		else if (strcmp(sensors->pin_name, "L2") == 0)
+		} else if (strcmp(sensors->pin_name, "L2") == 0) {
 			sensors->index = 0x14;
-		else if (strcmp(sensors->pin_name, "L1") == 0)
+		} else if (strcmp(sensors->pin_name, "L1") == 0) {
 			sensors->index = 0x18;
-		else if (strcmp(sensors->pin_name, "M5") == 0)
+		} else if (strcmp(sensors->pin_name, "M5") == 0) {
 			sensors->index = 0x1C;
-		else if (strcmp(sensors->pin_name, "M4") == 0)
+		} else if (strcmp(sensors->pin_name, "M4") == 0) {
 			sensors->index = 0x20;
-		else if (strcmp(sensors->pin_name, "M3") == 0)
+		} else if (strcmp(sensors->pin_name, "M3") == 0) {
 			sensors->index = 0x24;
-		else if (strcmp(sensors->pin_name, "M2") == 0)
+		} else if (strcmp(sensors->pin_name, "M2") == 0) {
 			sensors->index = 0x28;
-		else if (strcmp(sensors->pin_name, "M1") == 0)
+		} else if (strcmp(sensors->pin_name, "M1") == 0) {
 			sensors->index = 0x2C;
-		else if (strcmp(sensors->pin_name, "N5") == 0)
+		} else if (strcmp(sensors->pin_name, "N5") == 0) {
 			sensors->index = 0x30;
-		else if (strcmp(sensors->pin_name, "N4") == 0)
+		} else if (strcmp(sensors->pin_name, "N4") == 0) {
 			sensors->index = 0x34;
+		}
 	}
 }
 

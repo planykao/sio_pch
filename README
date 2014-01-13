@@ -10,16 +10,16 @@ hwm.conf - hardware monitor configuration file, it will move to conf/hwmon/
            when hardware monitor test program gets ready.
 hwmon.c - hardware monitor test program.
 Makefile - make file.
-pchlib.c - library for PCH.
-pchlib.h - header file for PCH library.
+libpch.c - library for PCH.
+libpch.h - header file for PCH library.
 README - this file.
 release - release directory
 script -- script directory
         |-- bypass
         |-- hwmon
         |-- gpio
-siolib.c - library for SIO.
-siolib.h - header file for SIO library.
+libsio.c - library for SIO.
+libsio.h - header file for SIO library.
 sitest.h - global header file.
 
 

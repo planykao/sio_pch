@@ -10,7 +10,7 @@
 #include <errno.h>
 
 #include <sitest.h>
-#include <siolib.h>
+#include <libsio.h>
 
 /* Refer to AST 1300 firmware spec. ver.063 */
 #define LOW_ADC_BASE_ADDR    0x1600
@@ -85,7 +85,7 @@ int main(int argc, unsigned char *argv[])
 	FILE *fp;
 	char *buf;
 	unsigned int hw_base_addr, base_addr, offset;
-	int i = 0, j = 0, count = 0, result = 0, time;
+	int i = 0, j = 0, count = 0, result = 0, time, plus;
 	float b = 0;
 
 	/* read sensor functions initialize, for SIO */
@@ -122,8 +122,7 @@ int main(int argc, unsigned char *argv[])
 	fp = fopen(argv[1], "r");
 
 	if ( fp == NULL) {
-		printf("Fail to open <%s>, please check the file name is correct.\n", \
-                argv[1]);
+		ERR("Fail to open <%s>, please enter the correct file name.\n", argv[1]);
 		exit(-1);
 	}
 
@@ -200,14 +199,25 @@ int main(int argc, unsigned char *argv[])
 //	exit(1);
 #endif
 
+	/* Enter the Extended Function Mode */
 	sio_enter(chip_model);
 	if (strncmp("AST", chip_model, 3) == 0) {
+		/* Always access AST1300 with SuperIO protocol, so do not exit 
+		 * Entended Function Mode. */
 		sio_ilpc2ahb_setup();
 		init_peci();
 	} else {
 		/* Read HW monitor base address */
 		hw_base_addr = read_hwmon_base_address();
 		sio_exit();
+	}
+
+	if (strncmp("NCT", chip_model, 3) == 0) {
+		plus = 5;
+	} else if (strcmp("F71889AD", chip_model) == 0) {
+		plus = 0;
+	} else if (strncmp("F7186", chip_model, 5) == 0) {
+		plus = 5;
 	}
 
 	/* Disable the buffer of STDOUT */
@@ -239,16 +249,6 @@ int main(int argc, unsigned char *argv[])
 
 				if (strncmp("NCT", chip_model, 3) == 0) {
 					bank_select(hw_base_addr, sensors[j].bank); /* Set Bank */
-				}
-
-				int plus;
-
-				if (strncmp("NCT", chip_model, 3) == 0) {
-					plus = 5;
-				} else if (strcmp("F71889AD", chip_model) == 0) {
-					plus = 0;
-				} else if (strncmp("F7186", chip_model, 5) == 0) {
-					plus = 5;
 				}
 
 				b = read_sio_sensor[sensors[j].type](hw_base_addr, \
@@ -332,8 +332,8 @@ unsigned int sio_ilpc2ahb_read(int lr, int hr)
 
 	/* 
 	 * Setup address
-	 * 0xF0: SIO iLPC2AHB address bit[31:24]   
-	 * 0xF1: SIO iLPC2AHB address bit[23:16]   
+	 * 0xF0: SIO iLPC2AHB address bit[31:24]
+	 * 0xF1: SIO iLPC2AHB address bit[23:16]
 	 * 0xF2: SIO iLPC2AHB address bit[15:8]   
 	 * 0xF3: SIO iLPC2AHB address bit[7:0]
 	 */
@@ -347,9 +347,9 @@ unsigned int sio_ilpc2ahb_read(int lr, int hr)
 
 	/*
 	 * Read data
-	 * 0xF4: SIO iLPC2AHB data bit[31:24]   
-	 * 0xF5: SIO iLPC2AHB data bit[23:16]   
-	 * 0xF6: SIO iLPC2AHB data bit[15:8]   
+	 * 0xF4: SIO iLPC2AHB data bit[31:24]
+	 * 0xF5: SIO iLPC2AHB data bit[23:16]
+	 * 0xF6: SIO iLPC2AHB data bit[15:8]
 	 * 0xF7: SIO iLPC2AHB data bit[7:0]
 	 */
 	b = sio_read(0xF7 - mod); /* Get the value */
@@ -365,9 +365,9 @@ void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 
 	/* 
 	 * Setup address
-	 * 0xF0: SIO iLPC2AHB address bit[31:24]   
-	 * 0xF1: SIO iLPC2AHB address bit[23:16]   
-	 * 0xF2: SIO iLPC2AHB address bit[15:8]   
+	 * 0xF0: SIO iLPC2AHB address bit[31:24]
+	 * 0xF1: SIO iLPC2AHB address bit[23:16]
+	 * 0xF2: SIO iLPC2AHB address bit[15:8]
 	 * 0xF3: SIO iLPC2AHB address bit[7:0]
 	 */
 	sio_write(0xF0, hw >> 8);
@@ -377,9 +377,9 @@ void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 
 	/*
 	 * Write data
-	 * 0xF4: SIO iLPC2AHB data bit[31:24]   
-	 * 0xF5: SIO iLPC2AHB data bit[23:16]   
-	 * 0xF6: SIO iLPC2AHB data bit[15:8]   
+	 * 0xF4: SIO iLPC2AHB data bit[31:24]
+	 * 0xF5: SIO iLPC2AHB data bit[23:16]
+	 * 0xF6: SIO iLPC2AHB data bit[15:8]
 	 * 0xF7: SIO iLPC2AHB data bit[7:0]
 	 */
 	sio_write(0xF7, val_w);
@@ -436,7 +436,15 @@ void init_peci(void)
 	}
 }
 
-/* Read HW monitor base address */
+/* 
+ * Read HW monitor base address 
+ * The base address of the Address Port and Data Port is specified in registers 
+ * CR[60h] and CR[61h] of Logical Device B, the hardware monitor device. 
+ * CR[60h] is the high byte, and CR[61h] is the low byte. The Address Port
+ * and Data Port are located at the base address, plus 5h and 6h, respectively. 
+ * For example, if CR[60h] is 02h and CR[61h] is 90h, the Address Port is at 
+ * 0x295h, and the Data Port is at 0x296h
+ */
 unsigned int read_hwmon_base_address(void)
 {
 	unsigned int addr, high_addr, low_addr;
@@ -882,7 +890,7 @@ void pin_list(char *chip_model, struct sensor *sensors)
 			else if (strcmp(sensors->name, "Temp_ENV") == 0)
 				sensors->index = 0x98; /* device addres 0x90 */
 			else {
-				printf("%s: Error! Sensor name should be Temp_BMC or Temp_ENV\n");
+				ERR("Error! Sensor name should be Temp_BMC or Temp_ENV\n");
 				exit(-1);
 			}
 		/* SYS_FAN1 ~ SYS_FAN3 */

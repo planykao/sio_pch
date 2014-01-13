@@ -1,14 +1,27 @@
+# compiler
 CC = gcc
+
+# include directory
+INCLUDE = ${PWD}/
+
+# directory
 CONFDIR = ${PWD}/conf
 SCRIPTDIR = ${PWD}/script
 RELEASEDIR = ${PWD}/release
-INCLUDE = ${PWD}/
 LP_RELEASE_DIR = $(RELEASEDIR)/loopback
 BP_RELEASE_DIR = $(RELEASEDIR)/bypass
 HWMON_RELEASE_DIR = $(RELEASEDIR)/hwmon
-GPIO_OBJS = pchlib.o siolib.o
-HWMON_OBJS = siolib.o
 
+# objects
+GPIO_OBJS = libpch.o libsio.o
+HWMON_OBJS = libsio.o
+BP_OBJS = libsio.o
+
+BIN = bypass gpio-loopback hwmon
+GIT := $(shell which git 2> /dev/null)
+CHANGELOG = Changelog
+
+# debug flag
 DEBUG ?= 0
 ifeq ($(DEBUG), 1)
 	CFLAGS = -DDEBUG
@@ -16,7 +29,7 @@ else
 	CFLAGS = -DNDEBUG
 endif
 
-all: gpio hwmon release
+all: gpio hwmon bypass changelog release
 
 gpio: $(GPIO_OBJS)
 	$(CC) $(CFLAGS) -I$(INCLUDE) $(GPIO_OBJS) gpio-loopback.c \
@@ -25,11 +38,21 @@ gpio: $(GPIO_OBJS)
 hwmon: $(HWMON_OBJS)
 	$(CC) $(CFLAGS) -I$(INCLUDE) $(HWMON_OBJS) hwmon.c -o hwmon
 
-pchlib.o: pchlib.c
-	$(CC) $(CFLAGS) -I$(INCLUDE) -c pchlib.c
+bypass: $(BP_OBJS)
+	$(CC) $(CFLAGS) -I$(INCLUDE) $(BP_OBJS) bypass.c -o bypass
 
-siolib.o: siolib.c
-	$(CC) $(CFLAGS) -I$(INCLUDE) -c siolib.c
+libpch.o: libpch.c
+	$(CC) $(CFLAGS) -I$(INCLUDE) -c libpch.c
+
+libsio.o: libsio.c
+	$(CC) $(CFLAGS) -I$(INCLUDE) -c libsio.c
+
+changelog:
+ifndef GIT
+	@echo "git not found, please install git first."
+else
+	@git log > $(CHANGELOG)
+endif
 
 .PHONY: release	
 release:
@@ -41,4 +64,4 @@ release:
 
 .PHONY: clean
 clean:
-	rm -rf *.o gpio-loopback hwmon $(RELEASEDIR)/*
+	rm -rf *.o $(BIN) $(RELEASEDIR)/* $(CHANGELOG)

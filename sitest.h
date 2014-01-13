@@ -12,4 +12,7 @@
 #define DBG(args...)
 #endif
 
+#define ERR(format, args...) \
+        printf("%s[%d]: "format, __func__, __LINE__, ##args)
+
 #endif

@@ -12,8 +12,8 @@
 #include <sys/io.h>
 #include <errno.h>
 #include <sitest.h>
-#include <pchlib.h>
-#include <siolib.h>
+#include <libpch.h>
+#include <libsio.h>
 
 #if 0
 struct board_list
@@ -75,7 +75,7 @@ static int sio_gpio_calculate(int gpio)
 	if (gpio >= 70 && gpio <= 77)
 		return (gpio - 70);
 	else {
-		printf("GPIO number incorrect.\n");
+		ERR("GPIO number incorrect.\n");
 		exit(-1);
 	}
 }
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((fp = fopen(argv[1], "r")) == NULL) {
-		printf("No such file, please enter the correct file name.\n");
+		ERR("Fail to open <%s>, please enter the correct file name.\n", argv[1]);
 		printf("Usage: COMMAND FILE_NAME\n");
 		exit(-1);
 	}

@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/io.h>
-#include <siolib.h>
+#include <libsio.h>
 #include <sitest.h>
 
+/* Enter the Extended Function Mode */
 void sio_enter(char *chip)
 {
 	if (strncmp("AST1300", chip, 7) == 0) {
@@ -17,6 +18,7 @@ void sio_enter(char *chip)
 	}
 }
 
+/* Exit the Extended Function Mode */
 void sio_exit(void)
 {
 	outb_p(0xAA, EFER);

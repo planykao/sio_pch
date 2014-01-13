@@ -32,6 +32,8 @@
 
 unsigned int EFER;
 unsigned int EFDR;
+unsigned int SIO_ADDR_REG_OFFSET; /* Address Port register offset */
+unsigned int SIO_DATA_REG_OFFSET; /* Data Port register offset */
 
 void sio_gpio_enable(int ldnum);
 void sio_logical_device_enable(int bit);

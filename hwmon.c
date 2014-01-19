@@ -77,10 +77,12 @@ float read_ast_temperature_peci(unsigned int index, ...);
 float read_ast_temperature_i2c(unsigned int index, ...);
 float read_ast_fan(unsigned int index, ...);
 float read_ast_voltage(unsigned int index, ...);
+float read_ast_voltage1(unsigned int index, ...);
 
 void usage(void);
 
 int type_list(struct sensor *sensors);
+int ast_type_list(struct sensor *sensors);
 void pin_list(char *chip_model, struct sensor *sensors);
 
 char chip_model[10];
@@ -108,7 +110,8 @@ int main(int argc, unsigned char *argv[])
 		read_ast_temperature_peci,
 		read_ast_temperature_i2c,
 		read_ast_fan,
-		read_ast_voltage
+		read_ast_voltage,
+		read_ast_voltage1
 	};
 
 	/* change I/O privilege level to all access. For Linux only. */
@@ -171,6 +174,8 @@ int main(int argc, unsigned char *argv[])
                  sensors[j].multiplier);
 
 			pin_list(chip_model, &sensors[j]);
+			sensors[j].type = ast_type_list(&sensors[j]);
+			DBG("sensors[%d].type = %d\n", j, sensors[j].type);
 
 			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f, multiplier = %f\n", \
                  sensors[j].name, sensors[j].type, sensors[j].index, sensors[j].par1, \
@@ -251,7 +256,8 @@ int main(int argc, unsigned char *argv[])
                      sensors[j].par1, sensors[j].par2);
 
 				b = read_ast_sensor[sensors[j].type](sensors[j].index, \
-                                                     sensors[j].par1);
+                                                     sensors[j].par1, \
+                                                     sensors[j].multiplier);
 			
 				DBG("b = %f\n", b);
 			} else {
@@ -521,6 +527,11 @@ int type_list(struct sensor *sensors)
 	}
 }
 
+int ast_type_list(struct sensor *sensors)
+{
+	return (sensors->multiplier != 0 ? 4 : sensors->type);
+}
+
 float read_temperature(unsigned int address, int plus, struct sensor *sensors)
 {
 	return (sio_read_reg(sensors->index, address + plus) + sensors->par1);
@@ -686,6 +697,33 @@ float read_ast_voltage(unsigned int index, ...)
 
 	return result;
 }
+
+float read_ast_voltage1(unsigned int index, ...)
+{
+	unsigned int data_l = 0;
+	unsigned int data_h = 0;
+	unsigned int data = 0;
+	int low_addr;
+	int high_addr;
+	float multiplier;
+	va_list args;
+
+	low_addr = LOW_ADC_BASE_ADDR + index;
+	high_addr = HIGH_ADC_BASE_ADDR;
+	data_l = sio_ilpc2ahb_read(low_addr, high_addr);
+	data_h = sio_ilpc2ahb_read(low_addr + 1, high_addr);
+	data_h &= 0x03;
+	data = data_l | (data_h << 8);
+
+	va_start(args, index);
+	multiplier = va_arg(args, double);
+	multiplier = va_arg(args, double);
+	va_end(args);
+
+	/* Ask BIOS to get the ratio */
+	return (((float) data) * multiplier / 1024);
+}
+
 
 /* TODO: need to find a better way to do this... */
 void pin_list(char *chip_model, struct sensor *sensors)
@@ -893,10 +931,12 @@ void pin_list(char *chip_model, struct sensor *sensors)
 	} else if (strcmp("AST1300", chip_model)  ==  0) {
 		if (strcmp(sensors->pin_name, "AA21") == 0) { /* PECI */
 			if (strcmp(sensors->name, "TEMP_CPU0") == 0)
-				sensors->index = 0x54;
-			else if (strcmp(sensors->name, "TEMP_CPU1") == 0)
 				sensors->index = 0x50;
-			else {
+			else if (strcmp(sensors->name, "TEMP_CPU1") == 0)
+				sensors->index = 0x54;
+			else if (strcmp(sensors->name, "TEMP_CPU0_VR") == 0) {
+				sensors->index = 0x5C;
+			} else {
 				ERR("Sensor name should be Temp_CPU0 or Temp_CPU1\n");
 				exit(-1);
 			}
@@ -911,15 +951,54 @@ void pin_list(char *chip_model, struct sensor *sensors)
 				ERR("Sensor name should be Temp_BMC or Temp_ENV\n");
 				exit(-1);
 			}
-		/* SYS_FAN1 ~ SYS_FAN3 */
-		} else if (strcmp(sensors->pin_name, "Y5") == 0) {
-			sensors->index = 0x0C;
-			sensors->type = 2;
+		/* Tachometer, Channel 0 ~ 15 */
 		} else if (strcmp(sensors->pin_name, "V6") == 0) {
 			sensors->index = 0x08;
 			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "Y5") == 0) {
+			sensors->index = 0x0C;
+			sensors->type = 2;
 		} else if (strcmp(sensors->pin_name, "AA4") == 0) {
 			sensors->index = 0x10;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AB3") == 0) {
+			sensors->index = 0x14;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "W6") == 0) {
+			sensors->index = 0x18;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AA5") == 0) {
+			sensors->index = 0x1C;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AB4") == 0) {
+			sensors->index = 0x20;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "V7") == 0) {
+			sensors->index = 0x24;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "Y6") == 0) {
+			sensors->index = 0x28;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AB5") == 0) {
+			sensors->index = 0x2C;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "W7") == 0) {
+			sensors->index = 0x30;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AA6") == 0) {
+			sensors->index = 0x34;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AB6") == 0) {
+			sensors->index = 0x38;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "Y7") == 0) {
+			sensors->index = 0x3C;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AA7") == 0) {
+			sensors->index = 0x40;
+			sensors->type = 2;
+		} else if (strcmp(sensors->pin_name, "AB7") == 0) {
+			sensors->index = 0x44;
 			sensors->type = 2;
 		}
 		/* ADC0 ~ ADC11 */

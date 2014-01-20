@@ -58,16 +58,15 @@ HOW TO BUILD TEST PROGRAM
 
 KNOWN ISSUE
 ================================================================================
-1. Test program can't determine which I2C device should be read.
+1. Test program can't determine which I2C device or PECI channel should be read.
 
-   We use PECI and I2C to read temperature from AST1300, it's fine when we read 
-   temperature via PECI, but there is a problem when we read temperature via I2C
-   . I2C only has 2 pins, DATA and CLOCK. H/W use the same bus to connect 2
-   sensors, Temp_BMC and Temp_ENV, it means these two sensors use the same pin, 
-   and S/W use pin to decide which sensor we want to read, so S/W doesn't know 
-   which sensors should be read when it gets I2C pin from configuration file.
-
-   So far, before we find a better solution, it's hard-code in hwmon.c.
+   There are two different way can detect temperature, via I2C or PECI. For 
+   AST1300, I2C can connect to several devices and PECI can connect to 8 devices
+   . Software use pin to decide which sensor we want to read. But both I2C and 
+   PECI only has 2 pins, S/W doesn't know which sensors should be read.
+   
+   Thus, we write hardcode in hwmon.c to do this, this code should be changed 
+   when H/W has changed.
 
 2. Test program can't determine which interface(PECI or I2C) should be used when
    reading temperature.

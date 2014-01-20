@@ -937,18 +937,18 @@ void pin_list(char *chip_model, struct sensor *sensors)
 			else if (strcmp(sensors->name, "TEMP_CPU0_VR") == 0) {
 				sensors->index = 0x5C;
 			} else {
-				ERR("Sensor name should be Temp_CPU0 or Temp_CPU1\n");
+				ERR("Sensor name should be TEMP_CPU0 or TEMP_CPU1 or TEMP_CPU0_VR\n");
 				exit(-1);
 			}
 			sensors->type = 0;
 		} else if (strcmp(sensors->pin_name, "D1") == 0) { /* I2C */
 			sensors->type = 1;
-			if (strcmp(sensors->name, "Temp_BMC") == 0)
+			if (strcmp(sensors->name, "TEMP_BMC") == 0)
 				sensors->index = 0x90; /* device addres 0x90 */
-			else if (strcmp(sensors->name, "Temp_ENV") == 0)
+			else if (strcmp(sensors->name, "TEMP_ENV") == 0)
 				sensors->index = 0x98; /* device addres 0x90 */
 			else {
-				ERR("Sensor name should be Temp_BMC or Temp_ENV\n");
+				ERR("Sensor name should be TEMP_BMC or TEMP_ENV\n");
 				exit(-1);
 			}
 		/* Tachometer, Channel 0 ~ 15 */

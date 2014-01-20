@@ -36,7 +36,7 @@ else
 	CFLAGS += -DNDEBUG
 endif
 
-CFLAGS = -I$(INCLUDE)
+CFLAGS += -I$(INCLUDE)
 
 # targets
 all: gpio hwmon bypass changelog release

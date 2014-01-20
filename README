@@ -77,3 +77,9 @@ KNOWN ISSUE
 
    So far, before we find a better solution, it's hard-code in hwmon.c.
 
+3. On S0651, the input voltage of VCC_DDR is wrong, it can't be calculated with 
+   the following formula:
+   Vin = Vi * (R2 / (R1 + R2))
+   
+   For S0651, we just 8 times the value when read data from F71868A.
+

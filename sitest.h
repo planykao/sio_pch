@@ -13,6 +13,6 @@
 #endif
 
 #define ERR(format, args...) \
-        printf("%s[%d]: "format, __func__, __LINE__, ##args)
+        printf("%s[%d]: Error, "format, __func__, __LINE__, ##args)
 
 #endif

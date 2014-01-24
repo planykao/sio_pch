@@ -35,18 +35,24 @@ unsigned int EFDR;
 unsigned int SIO_ADDR_REG_OFFSET; /* Address Port register offset */
 unsigned int SIO_DATA_REG_OFFSET; /* Data Port register offset */
 
+void sio_enter(char *chip);
+void sio_exit(void);
+
 void sio_gpio_enable(int ldnum);
 void sio_logical_device_enable(int bit);
 int sio_gpio_get(int gpio);
 void sio_gpio_set(int gpio, int value);
 void sio_gpio_dir_in(int gpio);
 void sio_gpio_dir_out(int gpio, int value);
-void sio_enter(char *chip);
-void sio_exit(void);
+
 int sio_read(int reg);
 void sio_write(int reg, int val);
 int sio_read_reg(int index, int address);
 void sio_write_reg(int index, int address);
 void sio_select(int ldnum);
 
+/* For AST1300 */
+void sio_ilpc2ahb_setup(void);
+void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
+unsigned int sio_ilpc2ahb_read(int lr, int hr);
 #endif

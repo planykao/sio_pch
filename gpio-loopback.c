@@ -1,4 +1,5 @@
-/* GPIO loop back testing.
+/* 
+ * GPIO loop back testing.
  * Support S0211, S0981, S0961 with PCH, and S0361 with SuperIO.
  */
 
@@ -83,7 +84,6 @@ static int sio_gpio_calculate(int gpio)
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value)
 {
 	int new_gpio;
-	unsigned char b;
 
 	/* Enable GPIO7 group */
 	sio_gpio_enable(SIO_GPIO_EN_REG);
@@ -129,8 +129,10 @@ int main(int argc, char *argv[])
 	FILE *fp;
 	char str[10];
 
-	/* Change I/O privilege level to all access. For Linux only. 
-	 * If has error, show error message. */
+	/* 
+	 * Change I/O privilege level to all access. For Linux only. 
+	 * If has error, show error message.
+	 */
 	if (iopl(3)) {
 		perror(NULL);
 		exit(1);

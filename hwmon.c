@@ -29,7 +29,7 @@
 #define HIGH_PECI_BASE_ADDR  0x1E72
 
 /* The base address is 0x1E720000 */
-#define AST1300_CTL_BASE_ADDR 0x1E72
+#define HIGH_CTL_BASE_ADDR   0x1E72
 
 /* 
  * Define the struct for Sensor.
@@ -59,13 +59,9 @@ struct sensor {
 	float multiplier;
 };
 
-
 void bank_select(unsigned int address, unsigned int bank);
-void sio_ilpc2ahb_setup(void);
 void init_peci(void);
-void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
 
-unsigned int sio_ilpc2ahb_read(int lr, int hr);
 unsigned int read_hwmon_base_address(void);
 
 float read_temperature(unsigned int address, int plus, struct sensor *sensors);
@@ -73,6 +69,7 @@ float read_fan_speed(unsigned int address, int plus, struct sensor *sensors);
 float read_voltage1(unsigned int address, int plus, struct sensor *sensors);
 float read_voltage2(unsigned int address, int plus, struct sensor *sensors);
 float read_voltage3(unsigned int address, int plus, struct sensor *sensors);
+
 float read_ast_temperature_peci(unsigned int index, ...);
 float read_ast_temperature_i2c(unsigned int index, ...);
 float read_ast_fan(unsigned int index, ...);
@@ -91,7 +88,7 @@ int main(int argc, unsigned char *argv[])
 {
 	FILE *fp;
 	char *buf;
-	unsigned int hw_base_addr, base_addr, offset;
+	unsigned int hw_base_addr, offset;
 	int i = 0, j = 0, count = 0, result = 0, time, plus;
 	float b = 0;
 
@@ -168,7 +165,8 @@ int main(int argc, unsigned char *argv[])
                         &sensors[j].low_limit, &sensors[j].high_limit, \
                         &sensors[j].multiplier);
 
-			DBG("name = %s, pin_name = %s, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f, multiplier = %f\n", \
+			DBG("name = %s, pin_name = %s, par1 = %f, par2 = %f, " \
+                "low_limit = %f, high_limit = %f, multiplier = %f\n", \
                  sensors[j].name, sensors[j].pin_name, sensors[j].par1, \
                  sensors[j].par2, sensors[j].low_limit, sensors[j].high_limit, \
                  sensors[j].multiplier);
@@ -177,10 +175,11 @@ int main(int argc, unsigned char *argv[])
 			sensors[j].type = ast_type_list(&sensors[j]);
 			DBG("sensors[%d].type = %d\n", j, sensors[j].type);
 
-			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f, multiplier = %f\n", \
-                 sensors[j].name, sensors[j].type, sensors[j].index, sensors[j].par1, \
-                 sensors[j].par2, sensors[j].low_limit, sensors[j].high_limit, \
-                 sensors[j].multiplier);
+			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, " \
+                "low_limit = %f, high_limit = %f, multiplier = %f\n", \
+                 sensors[j].name, sensors[j].type, sensors[j].index, \
+                 sensors[j].par1, sensors[j].par2, sensors[j].low_limit, \
+                 sensors[j].high_limit, sensors[j].multiplier);
 
 			j++;
 		}
@@ -191,7 +190,8 @@ int main(int argc, unsigned char *argv[])
                         &sensors[j].par2, &sensors[j].low_limit, \
                         &sensors[j].high_limit, &sensors[j].multiplier);
 
-			DBG("name = %s, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f, multiplier = %f\n", \
+			DBG("name = %s, par1 = %f, par2 = %f, low_limit = %f, " \
+                "high_limit = %f, multiplier = %f\n", \
                  sensors[j].name, sensors[j].par1, sensors[j].par2, \
                  sensors[j].low_limit, sensors[j].high_limit, \
                  sensors[j].multiplier);
@@ -199,7 +199,8 @@ int main(int argc, unsigned char *argv[])
 			pin_list(chip_model, &sensors[j]);
 			sensors[j].type = type_list(&sensors[j]);
 
-			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, low_limit = %f, high_limit = %f, multiplier = %f\n", \
+			DBG("name = %s, type = %d, index = %x, par1 = %f, par2 = %f, " \
+                "low_limit = %f, high_limit = %f, multiplier = %f\n", \
                  sensors[j].name, sensors[j].type, sensors[j].index, \
                  sensors[j].par1, sensors[j].par2, sensors[j].low_limit, \
                  sensors[j].high_limit, sensors[j].multiplier);
@@ -261,7 +262,8 @@ int main(int argc, unsigned char *argv[])
 			
 				DBG("b = %f\n", b);
 			} else {
-				DBG("hw_base_addr = %x, j = %d, type = %d, index = %x, bank = %d, par1 = %f, par2 = %f\n", 
+				DBG("hw_base_addr = %x, j = %d, type = %d, index = %x, " \
+                    "bank = %d, par1 = %f, par2 = %f\n", 
                      hw_base_addr, j, sensors[j].type, sensors[j].index, \
                      sensors[j].bank, sensors[j].par1, sensors[j].par2);
 
@@ -269,17 +271,8 @@ int main(int argc, unsigned char *argv[])
 					bank_select(hw_base_addr, sensors[j].bank); /* Set Bank */
 				}
 
-#if 0
-				b = read_sio_sensor[sensors[j].type](hw_base_addr, \
-                                                     sensors[j].index, \
-                                                     plus, \
-                                                     sensors[j].par1, \
-                                                     sensors[j].par2, \
-                                                     sensors[j].multiplier);
-#else
 				b = read_sio_sensor[sensors[j].type](hw_base_addr, plus, \
                                                      &sensors[j]);
-#endif
 				DBG("b = %f\n", b);
 			}
 
@@ -344,86 +337,6 @@ int main(int argc, unsigned char *argv[])
 	printf("\n\n");
 
 	return result;
-}
-
-unsigned int sio_ilpc2ahb_read(int lr, int hr)
-{
-	unsigned int b;
-	unsigned int mod;
-
-	mod = lr % 4; /* Address must be multiple of 4 */
-	lr = lr - mod;
-
-	/* 
-	 * Setup address
-	 * 0xF0: SIO iLPC2AHB address bit[31:24]
-	 * 0xF1: SIO iLPC2AHB address bit[23:16]
-	 * 0xF2: SIO iLPC2AHB address bit[15:8]   
-	 * 0xF3: SIO iLPC2AHB address bit[7:0]
-	 */
-	sio_write(0xF0, hr >> 8);
-	sio_write(0xF1, hr & 0xFF);
-	sio_write(0xF2, lr >> 8);
-	sio_write(0xF3, lr & 0xFF);
-
-	/* Read to trigger SIO iLPC2AHB write command */
-	sio_read(0xFE);
-
-	/*
-	 * Read data
-	 * 0xF4: SIO iLPC2AHB data bit[31:24]
-	 * 0xF5: SIO iLPC2AHB data bit[23:16]
-	 * 0xF6: SIO iLPC2AHB data bit[15:8]
-	 * 0xF7: SIO iLPC2AHB data bit[7:0]
-	 */
-	b = sio_read(0xF7 - mod); /* Get the value */
-
-	DBG("b = %x\n", b);
-	return b;
-}
-
-void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
-{
-	unsigned int b;
-	unsigned int mod;
-
-	/* 
-	 * Setup address
-	 * 0xF0: SIO iLPC2AHB address bit[31:24]
-	 * 0xF1: SIO iLPC2AHB address bit[23:16]
-	 * 0xF2: SIO iLPC2AHB address bit[15:8]
-	 * 0xF3: SIO iLPC2AHB address bit[7:0]
-	 */
-	sio_write(0xF0, hw >> 8);
-	sio_write(0xF1, hw & 0xFF);
-	sio_write(0xF2, lw >> 8);
-	sio_write(0xF3, lw & 0xFF);
-
-	/*
-	 * Write data
-	 * 0xF4: SIO iLPC2AHB data bit[31:24]
-	 * 0xF5: SIO iLPC2AHB data bit[23:16]
-	 * 0xF6: SIO iLPC2AHB data bit[15:8]
-	 * 0xF7: SIO iLPC2AHB data bit[7:0]
-	 */
-	sio_write(0xF7, val_w);
-
-	/* Write 0xCF to trigger SIO iLPC2AHB write command */
-	sio_write(0xFE, 0xCF);
-}
-
-void sio_ilpc2ahb_setup(void)
-{
-	unsigned int b;
-
-	/* select logical device iLPC2AHB */
-	sio_select(SIO_LPC2AHB_LDN);
-	/* enable iLPC2AHB */
-	sio_logical_device_enable(SIO_LPC2AHB_EN);
-	/* Set Length to 1 Byte */
-	b = sio_read(0xF8);
-	b &= ~(0x03);
-	sio_write(0xF8, b);
 }
 
 void init_peci(void)

@@ -7,7 +7,7 @@
 
 # Check Hardware Monitor
 
-./hwmon 10
+./hwmon $1 10
 
 if [ "$?" == "0" ]; then
 	echo -e "\033[0;30;42m ********************************* \033[0m"

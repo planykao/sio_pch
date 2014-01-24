@@ -226,7 +226,8 @@ int main(int argc, unsigned char *argv[])
 		sio_exit();
 	}
 
-	if (strncmp("NCT", chip_model, 3) == 0) {
+	if (strncmp("NCT", chip_model, 3) == 0 || \
+        strncmp("W83", chip_model, 3) == 0) {
 		plus = 5;
 	} else if (strncmp("F71889", chip_model, 6) == 0) {
 		plus = 0;
@@ -267,7 +268,8 @@ int main(int argc, unsigned char *argv[])
                      hw_base_addr, j, sensors[j].type, sensors[j].index, \
                      sensors[j].bank, sensors[j].par1, sensors[j].par2);
 
-				if (strncmp("NCT", chip_model, 3) == 0) {
+				if (strncmp("NCT", chip_model, 3) == 0 || \
+                    strncmp("W83", chip_model, 3) == 0) {
 					bank_select(hw_base_addr, sensors[j].bank); /* Set Bank */
 				}
 
@@ -386,7 +388,8 @@ unsigned int read_hwmon_base_address(void)
 {
 	unsigned int addr, high_addr, low_addr;
 
-	if (strncmp("NCT", chip_model, 3) == 0) {
+	if (strncmp("NCT", chip_model, 3) == 0 || \
+        strncmp("W83", chip_model, 3) == 0) {
 		sio_select(0x0B); /* Select Logical device B */
 	} else { /* For Fintek */
 		sio_select(0x04); /* Logical device number 4 */
@@ -413,7 +416,8 @@ void bank_select(unsigned int address, unsigned int bank)
 	outb_p(EFER, address + plus); /* Bank select */
 	data = inb_p(address + plus + 1);
 
-	if (strcmp("NCT6776F", chip_model) == 0) {
+	if (strcmp("NCT6776F", chip_model) == 0 || \
+        strncmp("W83", chip_model, 3) == 0) {
 		data &= ~(0x7); /* Clear bit0~2 */
 	} else if (strcmp("NCT6779D", chip_model) == 0) {
 		data &= ~(0x0F); /* Clear bit0~3 */
@@ -455,15 +459,20 @@ float read_fan_speed(unsigned int address, int plus, struct sensor *sensors)
 	int data;
 
 	data = sio_read_reg(sensors->index, address + plus);
+	DBG("data = %d\n", data);
 	data = data << 8;
+	DBG("data = %d\n", data);
 	data |= sio_read_reg(sensors->index + 1, address + plus);
+	DBG("data = %d\n", data);
 
 	if (strncmp("F718", chip_model, 4) == 0) {
 		data = 1500000 / data;
 	}
 
+#if 0
 	if (data == sensors->par1) /* If the fan speed = par1, set the fan speed =0 */
 		data = 0;
+#endif
 
 	return (data == sensors->par1) ? 0 : data;
 }
@@ -480,7 +489,7 @@ float read_voltage2(unsigned int address, int plus, struct sensor *sensors)
 
 	data = sio_read_reg(sensors->index, address + plus);
 
-	DBG("address = %x, index = %d, par1 = %f, par2 = %f, data = %d\n", \
+	DBG("address = %x, index = %x, par1 = %f, par2 = %f, data = %d\n", \
          address, sensors->index, sensors->par1, sensors->par2, data);
 
 	result = ((float) data) * ((float) (sensors->par1 + sensors->par2)) / \
@@ -765,9 +774,68 @@ void pin_list(char *chip_model, struct sensor *sensors)
 				sensors->bank = 4;
 				break;
 		}
+	} else if (strncmp("W83", chip_model, 3) == 0) {
+		switch (pin) {
+			case 28:
+				sensors->index = 0x23;
+				sensors->bank = 0;
+				break;
+			case 61:
+				sensors->index = 0x50;
+				sensors->bank = 5;
+				break;
+			case 74:
+				sensors->index = 0x51;
+				sensors->bank = 5;
+				break;
+			case 95:
+				sensors->index = 0x22;
+				sensors->bank = 0;
+				break;
+			case 96:
+				sensors->index = 0x26;
+				sensors->bank = 0;
+				break;
+			case 97: 
+				sensors->index = 0x25;
+				sensors->bank = 0;
+				break;
+			case 99:
+				sensors->index = 0x21;
+				sensors->bank = 0;
+				break;
+			case 100:
+				sensors->index = 0x20;
+				sensors->bank = 0;
+				break;
+			case 102:
+				sensors->index = 0x50;
+				sensors->bank = 2;
+				break;
+			case 103:
+				sensors->index = 0x50;
+				sensors->bank = 1;
+				break;
+			case 104:
+				sensors->index = 0x27;
+				sensors->bank = 0;
+				break;
+			case 111:
+				sensors->index = 0x54;
+				sensors->bank = 6;
+				break;
+			case 112:
+				sensors->index = 0x50;
+				sensors->bank = 6;
+				break;
+			case 119:
+				sensors->index = 0x52;
+				sensors->bank = 6;
+				break;
+		}
 	} else if (strncmp("F718", chip_model, 4) == 0) {
 		sensors->bank = 0;
-		switch(pin) {
+		switch (pin) {
 			case 21:
 				sensors->index = 0xA0;
 				break;

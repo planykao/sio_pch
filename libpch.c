@@ -11,7 +11,7 @@ int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
 {
 	int new_gpio;
 
-	if (gpio >=1 && gpio <= 31) {
+	if (gpio >= 0 && gpio <= 31) {
 		*gpio_use_sel_addr = GPIO_USE_SEL1_ADDR(base_addr);
 		*gp_io_sel_addr = GP_IO_SEL1_ADDR(base_addr);
 		*gp_lvl_addr = GP_LVL1_ADDR(base_addr);
@@ -60,7 +60,7 @@ void gpio_set(unsigned long int gp_lvl_addr, int gpio, int value)
 	buf &= ~(0x1 << gpio); /* Set the bit to 0 for low level */
 	buf |= (value << gpio); /* Set the bit to 1 for high level */
 	outl_p(buf, gp_lvl_addr); /* Output the value */
-	printf("Set GPIO Level to %d\n", value);
+	DBG("Set GPIO Level to %d\n", value);
 }
 
 void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio)
@@ -89,5 +89,5 @@ void gpio_dir_out(unsigned long int gp_io_sel_addr, \
 	buf &= ~(0x1 << gpio); /* Set the bit to 0 for low level */
 	buf |= (value << gpio); /* Set the bit to 1 for high level */
 	outl_p(buf, gp_lvl_addr); /* Output the value */
-	DBG("Set GPIO[%d] Level to %d\n", gpio, value);
+	DBG("Set GPIO[%d] Level to %s\n", gpio, value ? "HIGH" : "LOW");
 }

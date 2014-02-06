@@ -1,6 +1,3 @@
-//Support S0381 and S0211
-//GPIO controled by ASpeed AST2300 and AST1300
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,31 +7,73 @@
 
 #include <sitest.h>
 #include <libsio.h>
+#include <libpch.h>
 
-#define EFER 0x2e
-#define EFDR 0x2f
+#define LOW_GPIO_BASE_ADDR  0x0000 /* Refer to AST Datasheet page 416 */
+#define HIGH_GPIO_BASE_ADDR 0x1E78		
 
-#define Low_GPIO_BASE_ADDR 0x0000 /* Refer to AST Datasheet page 416 */
-#define High_GPIO_BASE_ADDR 0x1E78		
+#define PAIR_GPIO_NUM 3
+#define AST_GPIO_NUM  19
+#define CPLD_DELAY   200000 /* micro second */
 
-#define uchar unsigned char
+struct cpld_cfg
+{
+	int pair_g[12];
+	int cfg_g[9];
+	int sendbit[3];
+};
 
+struct ast_cpld_cfg
+{
+	char pair_g[12][3];
+	char cfg_g[3][3];
+	char sendbit[3];
+};
+
+struct gpio_groups
+{
+	char name;
+	unsigned long int data_offset;
+	unsigned long int dir_offset;
+};
 
 void usage(void);
-void set_bp(int pair, int on,int off, int wdt);
 
-uchar read_sio(int index);
-void write_sio(int index, uchar val_w);
-uchar read_reg(int lr, int hr);
-void write_reg(uchar val_w, int lw, int hw);
+void set_gpio(int gpio,int value);
+void pair_setup(int pair, struct cpld_cfg *cpld);
+void cfg_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld);
+void cpld_trigger(int pair, struct cpld_cfg *cpld);
+void bypass_setup(int pair,int on, int off, int wdt, struct cpld_cfg *cpld);
+
+int ast_get_gpio_offset(char *pair_g, struct gpio_groups *gg);
+int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg);
+void ast_pair_setup(int value, unsigned long int data_offset, int offset);
+void ast_cfg_setup(int value, unsigned long int data_offset, int offset);
+void ast_cpld_trigger(unsigned long int data_offset, int offset);
+int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
+                      struct gpio_groups *gg);
+
+unsigned char read_sio(int index);
+void write_sio(int index, unsigned char val_w);
+unsigned char read_reg(int lr, int hr);
+void write_reg(unsigned char val_w, int lw, int hw);
+
 int check_arguments(char *argv[], int *, int *, int *, int *);
+int read_config(char *, struct cpld_cfg *, struct ast_cpld_cfg *, char *);
+
+unsigned long int gpio_base_addr;
+static int total_pair_pin_num;
+static int total_cfg_pin_num = 3;
 
 int main(int argc, char *argv[])
 {
-	uchar b;
-	int pair, on, off, wdt;
+	unsigned char b;
+	int pair, on, off, wdt, cfg;
+	char chip[10];
+	struct cpld_cfg *cpld;
+	struct ast_cpld_cfg *ast_cpld;
 
-	if (argc < 5) {
+	if (argc < 6) {
 		usage();
 		exit(-1);
 	}
@@ -45,8 +84,16 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
+	cpld = malloc(sizeof(struct cpld_cfg));
+	ast_cpld = malloc(sizeof(struct ast_cpld_cfg));
+
+	if (read_config(argv[1], cpld, ast_cpld, chip)) {
+		ERR("Fail to open <%s>, please enter the correct file name.\n", argv[1]);
+		free(cpld);
+		exit(-1);
+	}
+
 	DBG("pair = %d, on = %d, off = %d, wdt = %d\n", pair, on, off, wdt);
-	exit(0);
 
 	/* change I/O privilege level to all access. For Linux only. */
 	if (iopl(3)) {
@@ -54,11 +101,55 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	sio_enter("AST1300");
+	if (strcmp(chip, "PCH") == 0) {
+		bypass_setup(pair, on, off, wdt, cpld);
+	} else if (strcmp(chip, "SIO") == 0 || strncmp(chip, "AST", 3) == 0) {
+		/* Assign EFER and EFDR for SuperIO */
+		EFER = gpio_base_addr;
+		EFDR = gpio_base_addr + 1;
 
-	set_bp(pair, on, off, wdt);
+		/* Enter the Extended Function Mode */
+		sio_enter(chip);
 
-	sio_exit();
+		if (strncmp(chip, "AST", 3) == 0) {
+			sio_ilpc2ahb_setup();
+
+			struct gpio_groups gg[AST_GPIO_NUM] = {
+				{'A', 0x00, 0x04}, {'B', 0x01, 0x05}, \
+                {'C', 0x02, 0x06}, {'D', 0x03, 0x07}, \
+				{'E', 0x20, 0x24}, {'F', 0x21, 0x25}, \
+                {'G', 0x22, 0x26}, {'H', 0x23, 0x27}, \
+				{'I', 0x70, 0x74}, {'J', 0x71, 0x75}, \
+                {'K', 0x72, 0x76}, {'L', 0x73, 0x77}, \
+				{'M', 0x78, 0x7C}, {'N', 0x79, 0x7D}, \
+                {'O', 0x7A, 0x7E}, {'P', 0x7B, 0x7F}, \
+				{'Q', 0x80, 0x84}, {'R', 0x81, 0x85}, \
+                {'S', 0x82, 0x86}
+			};
+
+			if (ast_gpio_init(ast_cpld, gg)) {
+				ERR("ast_gpio_init fail.\n");
+				exit(-1);
+			}
+
+			/*
+			 * ast_bypass_setup(..., int cfg, ...), 
+			 * cfg = wdt | off << 1 | on << 2
+			 * cfg_g[0] --> CFG1: WDT, 0 for Reset       , 1 for Bypass.
+			 * cfg_g[1] --> CFG2: OFF, 0 for Pass Through, 1 for Bypass.
+			 * cfg_g[2] --> CFG3: ON , 0 for Pass Through, 1 for Bypass.
+			 */
+			if (ast_bypass_setup(pair, wdt | off << 1 | on << 2, ast_cpld, gg)) {
+				ERR("ast_bypass_setup fail.\n");
+				sio_exit();
+				exit(-1);
+			}
+		}
+
+		sio_exit();
+	} else {
+		ERR("%s is illegal name.\n", chip);
+	}
 
 	return 0;
 }
@@ -67,175 +158,445 @@ int check_arguments(char *argv[], int *pair, int *on, int *off, int *wdt)
 {
 	int i;
 
-	for (i = 1; i <= 4; i++) {
-		DBG("argv[%d] = %s\n", i, argv[i]);
-		if (atoi(argv[i]) < 0 || atoi(argv[i]) > 1)
-			return 1;
+	if (atoi(argv[2]) < 1 || atoi(argv[2]) > 8) {
+		ERR("Pair should >= 1 and <= 8\n");
+		return 1;
 	}
 
-	*pair = atoi(argv[1]);
-	*on = atoi(argv[2]);
-	*off = atoi(argv[3]);
-	*wdt = atoi(argv[4]);
+	for (i = 3; i <= 5; i++) {
+		if (atoi(argv[i]) < 0 || atoi(argv[i]) > 1) {
+			ERR("PWRON/PWROFF/WDT should be 0 or 1\n");
+			return 1;
+		}
+	}
+
+	*pair = atoi(argv[2]);
+	*on   = atoi(argv[3]);
+	*off  = atoi(argv[4]);
+	*wdt  = atoi(argv[5]);
 
 	return 0;
 }
 
-uchar read_sio(int index)
+int read_config(char *filename, struct cpld_cfg *cpld, \
+                struct ast_cpld_cfg *ast_cpld, char *chip)
 {
-	uchar b;
+	FILE *fp;
+	int i;
+	char number[3][3];
 
-	outb_p (index, EFER);		//Sent index to EFER
-	b = inb_p (EFDR);			//Get the value from EFDR
-	return b;					//Return the value
+	fp = fopen(filename, "r");
+
+	if (fp == NULL)
+		return 1;
+
+	DBG("filename: %s\n", filename);
+
+	if (strncmp(filename, "S0961", 5) == 0)
+		total_pair_pin_num = 9;
+	else
+		total_pair_pin_num = 3;
+
+	/* Skip the header */
+	for (i = 0; i < 5; i++)
+		fscanf(fp, "%*[^\n]\n", NULL);
+
+	fscanf(fp, "%[^,], %x\n", chip, &gpio_base_addr);
+	DBG("chip: %s, gpio_base_addr = %x\n", chip, gpio_base_addr);
+	
+	if (strncmp(chip, "AST", 3) == 0) {
+		free(cpld);
+		fscanf(fp, "%[^,], %[^,], %[^\n]\n", ast_cpld->pair_g[0], \
+               ast_cpld->pair_g[1], ast_cpld->pair_g[2]);
+		fscanf(fp, "%[^,], %[^,], %[^\n]\n", ast_cpld->cfg_g[0], \
+               ast_cpld->cfg_g[1], ast_cpld->cfg_g[2]);
+		fscanf(fp, "%s", ast_cpld->sendbit);
+
+#ifdef DEBUG
+		DBG("\n");
+		printf("================GPIOs================\n");
+		for (i = 0; i < total_pair_pin_num; i++)
+			printf("%s ", ast_cpld->pair_g[i]);
+		printf("\n");
+		for (i = 0; i < total_pair_pin_num; i++)
+			printf("%s ", ast_cpld->cfg_g[i]);
+		printf("\n");
+		for (i = 0; i < total_pair_pin_num / 3; i++)
+			printf("%s ", cpld->sendbit);
+		printf("=====================================\n");
+#endif
+	} else {
+		free(ast_cpld);
+
+		if (strncmp(filename, "S0961", 5) == 0) {
+			fscanf(fp, "%d, %d, %d, %d, %d, %d, %d, %d, %d\n", \
+                   &cpld->pair_g[0], &cpld->pair_g[1], &cpld->pair_g[2], \
+                   &cpld->pair_g[3], &cpld->pair_g[4], &cpld->pair_g[5], \
+                   &cpld->pair_g[6], &cpld->pair_g[7], &cpld->pair_g[8]);
+			fscanf(fp, "%d, %d, %d, %d, %d, %d, %d, %d, %d\n", \
+                   &cpld->cfg_g[0], &cpld->cfg_g[1], &cpld->cfg_g[2], \
+                   &cpld->cfg_g[3], &cpld->cfg_g[4], &cpld->cfg_g[5], \
+                   &cpld->cfg_g[6], &cpld->cfg_g[7], &cpld->cfg_g[8]);
+			fscanf(fp, "%d, %d, %d\n", &cpld->sendbit[0], &cpld->sendbit[1], \
+                                       &cpld->sendbit[2]);
+		} else {
+			fscanf(fp, "%d, %d, %d\n", &cpld->pair_g[0], &cpld->pair_g[1], \
+                                       &cpld->pair_g[2]);
+			fscanf(fp, "%d, %d, %d\n", &cpld->cfg_g[0], &cpld->cfg_g[1], \
+                                       &cpld->cfg_g[2]);
+			fscanf(fp, "%d\n", &cpld->sendbit[0]);
+		}
+
+#ifdef DEBUG
+		DBG("\n");
+		printf("================GPIOs================\n");
+		for (i = 0; i < total_pair_pin_num; i++)
+			printf("%d ", cpld->pair_g[i]);
+		printf("\n");
+		for (i = 0; i < total_pair_pin_num; i++)
+			printf("%d ", cpld->cfg_g[i]);
+		printf("\n");
+		for (i = 0; i < total_pair_pin_num / 3; i++)
+			printf("%d ", cpld->sendbit[i]);
+		printf("\n");
+		printf("=====================================\n");
+#endif
+	}
+
+	fclose(fp);
+
+	return 0;
 }
 
-void write_sio(int index, uchar val_w)
+int ast_get_gpio_offset(char *gpio, struct gpio_groups *gg)
 {
-	outb_p (index, EFER);			//Sent index at EFER
-	outb_p (val_w, EFDR);			//Send val_w at EFDR
+	int i;
+
+	DBG("gpio = %s\n", gpio);
+	for (i = 0; i < AST_GPIO_NUM; i++) {
+		if (strncmp(gpio, &gg[i].name, 1) == 0)
+			break;
+	}
+
+	if (i == AST_GPIO_NUM)
+		return -1;
+	else
+		return i;
 }
 
-uchar read_reg(int lr, int hr)
+/*
+ * ast_gpio_init(), initial GPIOs and set the direction to output.
+ */
+int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 {
-	uchar b;
-	int mod;
+	unsigned char data;
+	int i, ret, offset;
 
-	write_sio (0x07, 0x0d);	//Set Logical device number to SIORD (iLPC2AHB)
+	/* Setup GPIOs for Pair */
+	for (i = 0; i < total_pair_pin_num; i++) {
+		ret = ast_get_gpio_offset(cpld->pair_g[i], gg);
 
-	//Enable SIO iLPC2AHB
-	b=read_sio (0x30);
-	b |= 0x01;
-	write_sio (0x30, b);
+		if (ret == -1) {
+			ERR("fail to get gpio offset for %s.\n", cpld->pair_g[i]);
+			return 1;
+		}
 
-	//Set Length to 1 Byte
-	b=read_sio (0xf8);
-	b &= ~(0x03);
-	write_sio (0xf8, b);
+		offset = atoi(cpld->pair_g[i] + 1);
+		DBG("data_offset = %x, dir_offset = %x, offset = %d\n", \
+            gg[ret].data_offset, gg[ret].dir_offset, offset);
+	
+		/* 
+		 * set gpio direction 
+		 * 0x1: output
+         * 0x0: input
+		 */
+		data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                                 HIGH_GPIO_BASE_ADDR);
+		data |= (0x1 << offset);
+		sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                           HIGH_GPIO_BASE_ADDR);
+	}
 
-	mod = lr%4;		//Address must be multiple of 4
-	lr = lr - mod;
+	/* Setup GPIOs for CFG */
+	for (i = 0; i < total_cfg_pin_num; i++) {
+		ret = ast_get_gpio_offset(cpld->cfg_g[i], gg);
 
-	b = hr>>8;		//Set address
-	write_sio (0xf0, b);
-	b = hr&0x00ff;
-	write_sio (0xf1, b);
-	b = lr>>8;
-	write_sio (0xf2, b);
-	b = lr&0x00ff;
-	write_sio (0xf3, b);
+		if (ret == -1) {
+			ERR("fail to get gpio offset for %s.\n", cpld->cfg_g[i]);
+			return 1;
+		}
 
-	read_sio(0xfe);		//Read Trigger
-	usleep (10000);
+		offset = atoi(cpld->cfg_g[i] + 1);
+		DBG("data_offset = %x, dir_offset = %x, offset = %d\n", \
+            gg[ret].data_offset, gg[ret].dir_offset, offset);
 
-	b = read_sio (0xf7 - mod);	//Get the value
-	return b;
+		/* 
+		 * set gpio direction 
+		 * 0x1: output
+         * 0x0: input
+		 */
+		data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                                 HIGH_GPIO_BASE_ADDR);
+		data |= (0x1 << offset);
+		sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                           HIGH_GPIO_BASE_ADDR);
+	}
+
+	/* Setup GPIO for sendbit */
+	ret = ast_get_gpio_offset(cpld->sendbit, gg);
+
+	if (ret == -1) {
+		ERR("fail to get gpio offset for %s.\n", cpld->sendbit);
+		return 1;
+	}
+
+	offset = atoi(cpld->sendbit + 1);
+	DBG("data_offset = %x, dir_offset = %x, offset = %d\n", \
+        gg[ret].data_offset, gg[ret].dir_offset, offset);
+
+	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                             HIGH_GPIO_BASE_ADDR);
+	data |= (0x1 << offset);
+	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                       HIGH_GPIO_BASE_ADDR);
+
+	return 0;
 }
 
-void write_reg(uchar val_w, int lw, int hw)
+/*
+ * ast_pair_setup(), setup the Pair.
+ */
+void ast_pair_setup(int value, unsigned long int data_offset, int offset)
 {
-	int b;
-	int mod;
+	int data;
 
-	write_sio (0x07, 0x0d);		//Set Logical device number to SIORD
+	DBG("value = %d\n", value);
 
-	//Enable SIO iLPC2AHB
-	b=read_sio (0x30);
-	b |= 0x01;
-	write_sio (0x30, b);
-
-	//Set Length to 1 Byte
-	b=read_sio (0xf8);
-	b &= ~(0x03);
-	write_sio (0xf8, b);
-
-	//	mod = lw%4;		//Address must be multiple of 4
-	//	lw = lw - mod;
-
-	b = hw>>8;						//Set address
-	write_sio (0xf0, b);
-	b = hw&0x00ff;
-	write_sio (0xf1, b);
-	b = lw>>8;
-	write_sio (0xf2, b);
-	b = lw&0x00ff;
-	write_sio (0xf3, b);
-
-	//read_sio(0xfe);		//Read Trigger
-	//usleep (10000);
-
-	write_sio (0xf7, val_w);	//Send the value
-
-	write_sio (0xfe, 0xcf);		//Write Trigger
-	usleep (10000);
+	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+                             HIGH_GPIO_BASE_ADDR);
+	data &= ~(0x1 << offset);
+	data |= (value << offset);
+	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+                       HIGH_GPIO_BASE_ADDR);
 }
 
-void set_bp(int pair, int on, int off, int wdt)
+/*
+ * ast_cfg_setup(). setup the CFG.
+ */
+void ast_cfg_setup(int value, unsigned long int data_offset, int offset)
 {
-	int procedure = 4;
-	uchar data;
+	int data;
 
-	/* Set GPIOJ0, J1, J2, J3 to output */
-	data = read_reg(Low_GPIO_BASE_ADDR + 0x75, High_GPIO_BASE_ADDR);
-	data |= 0x0f;
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x75, High_GPIO_BASE_ADDR);
+	DBG("value = %d\n", value);
 
-	/* Set GPIOG0, G1, G2 to output */
-	data = read_reg(Low_GPIO_BASE_ADDR + 0x26, High_GPIO_BASE_ADDR);
-	data |= 0x07;
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x26, High_GPIO_BASE_ADDR);
-
-	// Set Pair (GPIOJ0, J1, J2)
-	printf ("Set Pair to %02X\n", pair);
-	data = 	read_reg(Low_GPIO_BASE_ADDR + 0x71, High_GPIO_BASE_ADDR);
-	data &= ~(0x07);
-	data |= pair;
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x71, High_GPIO_BASE_ADDR);
-
-	//Set CFG1 (GPIOJ3)
-	data = 	read_reg(Low_GPIO_BASE_ADDR + 0x71, High_GPIO_BASE_ADDR);
-	printf ("Set CFG1 from %02X", data);
-	data &= ~(0x08);
-	data |= wdt<<3;
-	printf (" to %02X\n", data);
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x71, High_GPIO_BASE_ADDR);
-
-	//Set CFG2 (GPIOG0)
-	data = 	read_reg(Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-	printf ("Set CFG2 from %02X", data);
-	data &= ~(0x01);
-	data |= off;
-	printf (" to %02X\n", data);
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-
-	//Set CFG3 (GPIOG1)
-	data = 	read_reg(Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-	printf ("Set CFG3 from %02X", data);
-	data &= ~(0x02);
-	data |= on<<1;
-	printf (" to %02X\n", data);
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-
-	//Set Sendbits to high then low (GPIOG2)
-	data = 	read_reg(Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-	printf ("Set Sendbit from %02X", data);
-	data |= (0x04);
-	printf (" to %02X\n", data);
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-
-	usleep (200000);
-
-	data = 	read_reg(Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
-	printf ("Set Sendbit from %02X", data);
-	data &= ~(0x04);
-	printf (" to %02X\n", data);
-	write_reg(data, Low_GPIO_BASE_ADDR + 0x22, High_GPIO_BASE_ADDR);
+	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+                             HIGH_GPIO_BASE_ADDR);
+	data &= ~(0x1 << offset);
+	data |= (value << offset);
+	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+                       HIGH_GPIO_BASE_ADDR);
 }
 
-void usage(void)	//If parameter is wrong, it will show this message
+/*
+ * ast_cpld_trigger(), trigger the sendbit.
+ */
+void ast_cpld_trigger(unsigned long int data_offset, int offset)
 {
-	printf("Support S0381 and S0211\n"
-			"Usage : Command [Pair] [PWRON] [PWROFF] [WDT]\n"
+	int data;
+
+	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+                             HIGH_GPIO_BASE_ADDR);
+	data &= ~(0x1 << offset);
+	data |= (GPIO_LOW << offset);
+	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+                       HIGH_GPIO_BASE_ADDR);
+
+	usleep(CPLD_DELAY);
+
+	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+                             HIGH_GPIO_BASE_ADDR);
+	data &= ~(0x1 << offset);
+	data |= (GPIO_HIGH << offset);
+	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+                       HIGH_GPIO_BASE_ADDR);
+
+	usleep(CPLD_DELAY);
+
+	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+                             HIGH_GPIO_BASE_ADDR);
+	data &= ~(0x1 << offset);
+	data |= (GPIO_LOW << offset);
+	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+                       HIGH_GPIO_BASE_ADDR);
+}
+
+int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
+                     struct gpio_groups *gg)
+{
+	unsigned char data;
+	int i, ret, offset;
+
+	/* pair */
+	for (i = 0; i < total_pair_pin_num; i++) {
+		ret = ast_get_gpio_offset(cpld->pair_g[i], gg);
+
+		if (ret == -1) {
+			ERR("fail to get gpio offset for %s.\n", cpld->pair_g[i]);
+			return 1;
+		}
+
+		offset = atoi(cpld->pair_g[i] + 1);
+		ast_pair_setup((pair - 1 >> i) & 0x1, gg[ret].data_offset, offset);
+	}
+
+	/* cfg */
+	DBG("cfg = %d\n", cfg);
+
+	for (i = 0; i < total_cfg_pin_num; i++) {
+		ret = ast_get_gpio_offset(cpld->cfg_g[i], gg);
+
+		if (ret == -1) {
+			ERR("fail to get gpio offset for %s.\n", cpld->cfg_g[i]);
+			return 1;
+		}
+
+		offset = atoi(cpld->cfg_g[i] + 1);
+
+		/*
+		 * cfg_g[0] --> CFG1: Watch Dog Timer, 0 for Reset       , 1 for Bypass.
+		 * cfg_g[1] --> CFG2: OFF            , 0 for Pass Through, 1 for Bypass.
+		 * cfg_g[2] --> CFG3: ON             , 0 for Pass Through, 1 for Bypass.
+		 */
+		ast_cfg_setup((cfg >> i) & 0x1, gg[ret].data_offset, offset);
+	}
+
+	/* trigger */
+	ret = ast_get_gpio_offset(cpld->sendbit, gg);
+
+	if (ret == -1) {
+		ERR("fail to get gpio offset for %s.\n", cpld->sendbit);
+		return 1;
+	}
+
+	offset = atoi(cpld->sendbit + 1);
+	ast_cpld_trigger(gg[ret].data_offset, offset);
+
+	return 0;
+}
+
+/*
+ * TODO: implement a gpio_init() function to initial all GPIOs and set these 
+ *       GPIOs to output in gpio_init(). And then use gpio_set() to replace 
+ *       set_gpio() to make the code more readable.
+ */
+
+/*
+ * set_gpio(), set gpio_out direction to output and pull low or high.
+ */
+void set_gpio(int gpio, int value)
+{
+	unsigned long int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
+	int new_gpio;
+
+	DBG("gpio = %d, value = %d\n", gpio, value);
+	/* Set gpio_out direction to output and pull low or high. */
+	new_gpio = gpio_setup_addr(&gpio_use_sel_addr, &gp_io_sel_addr, \
+                               &gp_lvl_addr, gpio, gpio_base_addr);
+	DBG("gpio_use_sel_addr = %x, new_gpio = %d\n", gpio_use_sel_addr, new_gpio);
+	
+	gpio_enable(gpio_use_sel_addr, new_gpio);
+	DBG("gpio_sel_addr = %x, gp_lvl_addr =%x, value = %d\n", \
+         gp_io_sel_addr, gp_lvl_addr, value);
+	
+	gpio_dir_out(gp_io_sel_addr, gp_lvl_addr, new_gpio, value);
+}
+
+/*
+ * pair_setup(), setup the Pair.
+ *
+ * pair_g[0] --> Pair1
+ * pair_g[1] --> Pair2
+ * pair_g[2] --> Pair3
+ *
+ * If pair = 2, d'2 -> b'010, bit0 is 0, bit1 is 1, bit2 is 0, 
+ * so pair_g[2] = 0 
+ *    pair_g[1] = 1 
+ *    pair_g[0] = 0
+ *
+ * if pair = 3, d'5 -> b'011, bit0 is 1, bit1 is 1, bit2 is 0, 
+ * so pair_g[2] = 0
+ *    pair_g[1] = 1
+ *    pair+g[0] = 1.
+ */
+void pair_setup(int pair, struct cpld_cfg *cpld)
+{
+	int i, n = 0;
+
+	pair -= 1; /* make pair from 1 ~ 8 to 0 ~ 7 */
+
+	/* For S0961, it use different GPIOs for Pair1/2, Pair3/4 and Pair5/6 */
+	if (total_pair_pin_num == 9) {
+		n = pair / 2;
+		DBG("n = %d\n", n);
+	}
+
+	for (i = 0; i < PAIR_GPIO_NUM; i++)
+		set_gpio(cpld->pair_g[n * PAIR_GPIO_NUM + i], (pair >> i) & 0x1);
+}
+
+/*
+ * cfg_setup(), setup the CFG.
+ *
+ * cfg_g[0] --> CFG1: Watch Dog Timer, 0 for Reset       , 1 for Bypass.
+ * cfg_g[1] --> CFG2: OFF            , 0 for Pass Through, 1 for Bypass.
+ * cfg_g[2] --> CFG3: ON             , 0 for Pass Through, 1 for Bypass.
+ */
+void cfg_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
+{
+	int n = 0;
+
+	if (total_pair_pin_num == 9) {
+		n = ((pair - 1) / 2) * 3;
+		DBG("n = %d\n", n);
+	}
+
+	set_gpio(cpld->cfg_g[n + 0], wdt);
+	set_gpio(cpld->cfg_g[n + 1], off);
+	set_gpio(cpld->cfg_g[n + 2], on);
+}
+
+/*
+ * cpld_trigger(), trigger the sendbit.
+ *
+ * The sendbit is falling-edge trigger, the delay time must 
+ * longer than 100ms.
+ */
+void cpld_trigger(int pair, struct cpld_cfg *cpld)
+{
+	int n = 0;
+	
+	if (total_pair_pin_num == 9) {
+		n = (pair - 1) / 2;
+		DBG("n = %d\n", n);
+	}
+
+	set_gpio(cpld->sendbit[n], GPIO_LOW);
+	usleep(CPLD_DELAY);
+	set_gpio(cpld->sendbit[n], GPIO_HIGH);
+	usleep(CPLD_DELAY);
+	set_gpio(cpld->sendbit[n], GPIO_LOW);
+}
+
+void bypass_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
+{
+	pair_setup(pair, cpld);
+	cfg_setup(pair, on, off, wdt, cpld);
+	cpld_trigger(pair, cpld);
+}
+
+void usage(void)
+{
+	printf("Usage : Command [FileName] [Pair] [PWRON] [PWROFF] [WDT]\n"
 			" Pair : 0 and 1 for Slot1\n"
 			"        2 and 3 for Slot2\n"
 			"        4 and 5 for Slot3\n"

@@ -1,7 +1,7 @@
 #ifndef _MSI_SIOLIB_H
 #define _MSI_SIOLIB_H
 
-/* GPIO register address from SuperIO */
+/* Register address from SuperIO */
 #define SIO_LDSEL_REG       0x07
 #define SIO_ENABLE_REG      0x30
 #define SIO_HW_BASE_REG     0x60
@@ -10,9 +10,13 @@
 #define SIO_GPIO7_DATA_REG  0xE1
 #define SIO_GPIO7_EN_OFFSET (0x1 << 7)
 #define SIO_GPIO7_LDN       0x07
+#define SIO_WDT_LDN         0x08
+#define SIO_WDT_EN          0
+
 #define SIO_HWMON_EN        0
 #define SIO_LPC2AHB_LDN     0x0D
 #define SIO_LPC2AHB_EN      0
+#define SIO_WDT_EN          0
 
 /* Refer to AST 1300 firmware spec. ver.063 */
 #define LOW_ADC_BASE_ADDR    0x1600

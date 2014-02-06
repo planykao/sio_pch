@@ -16,15 +16,17 @@ HWMON_RELEASE_DIR = $(RELEASEDIR)/hwmon
 GPIO = gpio-loopback
 HWMON = hwmon
 BYPASS = bypass
+WDT = wdt
 LIBPCH = libpch.c
 LIBSIO = libsio.c
-BIN = $(GPIO) $(HWMON) $(BYPASS)
+BIN = $(GPIO) $(HWMON) $(BYPASS) $(WDT)
 CHANGELOG = Changelog
 
 # objects
 GPIO_OBJS = libpch.o libsio.o
 HWMON_OBJS = libsio.o
-BP_OBJS = libsio.o
+BP_OBJS = libpch.o libsio.o
+WDT_OBJS = libpch.o libsio.o
 
 GIT = $(shell which git > /dev/null 2>&1; echo $$?)
 
@@ -50,6 +52,9 @@ hwmon: $(HWMON_OBJS) $(HWMON).c
 bypass: $(BP_OBJS) $(BYPASS).c
 	$(CC) $(CFLAGS) $(BP_OBJS) $(BYPASS).c -o $(BYPASS)
 
+wdt: $(BP_OBJS) $(WDT).c
+	$(CC) $(CFLAGS) $(WDT_OBJS) $(WDT).c -o $(WDT)
+
 libpch.o: $(LIBPCH)
 	$(CC) $(CFLAGS) -c $(LIBPCH)
 
@@ -72,6 +77,7 @@ release:
 	if [ -f $(GPIO) ]; then cp -rf $(GPIO) $(LP_RELEASE_DIR); fi
 	if [ -f $(BYPASS) ]; then cp -rf $(BYPASS) $(BP_RELEASE_DIR); fi
 	if [ -f $(HWMON) ]; then cp -rf $(HWMON) $(HWMON_RELEASE_DIR); fi
+	if [ -f $(WDT) ]; then cp -rf $(WDT) $(BP_RELEASE_DIR); fi
 
 .PHONY: clean
 clean:

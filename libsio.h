@@ -2,21 +2,41 @@
 #define _MSI_SIOLIB_H
 
 /* Register address from SuperIO */
-#define SIO_LDSEL_REG       0x07
-#define SIO_ENABLE_REG      0x30
-#define SIO_HW_BASE_REG     0x60
-#define SIO_GPIO_EN_REG     0x09
-#define SIO_GPIO7_DIR_REG   0xE0
-#define SIO_GPIO7_DATA_REG  0xE1
-#define SIO_GPIO7_EN_OFFSET (0x1 << 7)
-#define SIO_GPIO7_LDN       0x07
-#define SIO_WDT_LDN         0x08
-#define SIO_WDT_EN          0
+#define SIO_LDSEL_REG              0x07
+#define SIO_ENABLE_REG             0x30
+#define SIO_HW_BASE_REG            0x60
+#define SIO_GPIO_EN_REG            0x09
+#define SIO_GPIO7_DIR_REG          0xE0
+#define SIO_GPIO7_DATA_REG         0xE1
+#define SIO_GPIO7_ENABLE           (0x1 << 7)
+#define SIO_GPIO7_LDN              0x07
 
-#define SIO_HWMON_EN        0
-#define SIO_LPC2AHB_LDN     0x0D
-#define SIO_LPC2AHB_EN      0
-#define SIO_WDT_EN          0
+/* for Nuvoton SuperIO */
+#define NCT_WDT_LDN                0x08
+#define NCT_WDT_EN                 0
+#define NCT_WDT_CTL_MODE_REG       0xF5
+#define NCT_WDT_CNT_REG            0xF6
+#define NCT_WDT_CTL_STA_REG        0xF7
+#define NCT_WDT_CNT_MODE_OFFSET    3
+#define NCT_WDT_CNT_MODE_1K_OFFSET 4
+#define NCT_WDT_STATUS_OFFSET      4
+
+/* for Fintek SuperIO */
+#define FINTEK_GPIO_LDN        0x06
+#define FIN_WDT_LDN            0x07
+#define FIN_WDT_CONF_REG       0xF0
+#define FIN_WDT_CONF_REG1      0xF5
+#define FIN_WDT_CONF_REG2      0xF6
+#define FIN_WDOUT_EN           (0x1 << 7)
+#define FIN_WD_RST_EN          (0x1 << 0)
+#define FIN_WD_EN              (0x1 << 5)
+#define FIN_WD_UNIT_OFFSET     3
+#define FIN_WDTMOUT_STS_OFFSET 6
+
+/* For Aspeed */
+#define SIO_HWMON_EN         0
+#define SIO_LPC2AHB_LDN      0x0D
+#define SIO_LPC2AHB_EN       0
 
 /* Refer to AST 1300 firmware spec. ver.063 */
 #define LOW_ADC_BASE_ADDR    0x1600

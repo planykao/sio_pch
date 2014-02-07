@@ -14,7 +14,7 @@
 
 #define PAIR_GPIO_NUM 3
 #define AST_GPIO_NUM  19
-#define CPLD_DELAY   200000 /* micro second */
+#define CPLD_DELAY    200000 /* micro second */
 
 struct cpld_cfg
 {
@@ -44,6 +44,13 @@ void pair_setup(int pair, struct cpld_cfg *cpld);
 void cfg_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld);
 void cpld_trigger(int pair, struct cpld_cfg *cpld);
 void bypass_setup(int pair,int on, int off, int wdt, struct cpld_cfg *cpld);
+
+void sio_pair_setup(int pair, struct cpld_cfg *cpld);
+void sio_cfg_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld);
+void sio_cpld_trigger(int pair, struct cpld_cfg *cpld);
+void sio_bypass_setup(int pair,int on, int off, int wdt, struct cpld_cfg *cpld);
+int f71889ad_get_gpio_dir_index(int gpio);
+void f71889ad_gpio_dir_out(int gpio, int value);
 
 int ast_get_gpio_offset(char *pair_g, struct gpio_groups *gg);
 int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg);
@@ -103,7 +110,7 @@ int main(int argc, char *argv[])
 
 	if (strcmp(chip, "PCH") == 0) {
 		bypass_setup(pair, on, off, wdt, cpld);
-	} else if (strcmp(chip, "SIO") == 0 || strncmp(chip, "AST", 3) == 0) {
+	} else if (strncmp(chip, "F71", 3) == 0 || strncmp(chip, "AST", 3) == 0) {
 		/* Assign EFER and EFDR for SuperIO */
 		EFER = gpio_base_addr;
 		EFDR = gpio_base_addr + 1;
@@ -127,10 +134,8 @@ int main(int argc, char *argv[])
                 {'S', 0x82, 0x86}
 			};
 
-			if (ast_gpio_init(ast_cpld, gg)) {
+			if (ast_gpio_init(ast_cpld, gg))
 				ERR("ast_gpio_init fail.\n");
-				exit(-1);
-			}
 
 			/*
 			 * ast_bypass_setup(..., int cfg, ...), 
@@ -139,11 +144,13 @@ int main(int argc, char *argv[])
 			 * cfg_g[1] --> CFG2: OFF, 0 for Pass Through, 1 for Bypass.
 			 * cfg_g[2] --> CFG3: ON , 0 for Pass Through, 1 for Bypass.
 			 */
-			if (ast_bypass_setup(pair, wdt | off << 1 | on << 2, ast_cpld, gg)) {
+			if (ast_bypass_setup(pair, wdt | off << 1 | on << 2, ast_cpld, gg))
 				ERR("ast_bypass_setup fail.\n");
-				sio_exit();
-				exit(-1);
-			}
+		} else if (strncmp(chip, "F71", 3) == 0) {
+			sio_select(FINTEK_GPIO_LDN);
+			sio_bypass_setup(pair, on, off, wdt, cpld);
+		} else {
+			ERR("this program doesn't support <%s> yet.", chip);
 		}
 
 		sio_exit();
@@ -203,7 +210,7 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
 
 	fscanf(fp, "%[^,], %x\n", chip, &gpio_base_addr);
 	DBG("chip: %s, gpio_base_addr = %x\n", chip, gpio_base_addr);
-	
+
 	if (strncmp(chip, "AST", 3) == 0) {
 		free(cpld);
 		fscanf(fp, "%[^,], %[^,], %[^\n]\n", ast_cpld->pair_g[0], \
@@ -270,18 +277,18 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
 
 int ast_get_gpio_offset(char *gpio, struct gpio_groups *gg)
 {
-	int i;
+	int offset;
 
 	DBG("gpio = %s\n", gpio);
-	for (i = 0; i < AST_GPIO_NUM; i++) {
-		if (strncmp(gpio, &gg[i].name, 1) == 0)
+	for (offset = 0; offset < AST_GPIO_NUM; offset++) {
+		if (strncmp(gpio, &gg[offset].name, 1) == 0)
 			break;
 	}
 
-	if (i == AST_GPIO_NUM)
+	if (offset == AST_GPIO_NUM)
 		return -1;
 	else
-		return i;
+		return offset;
 }
 
 /*
@@ -592,6 +599,135 @@ void bypass_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
 	pair_setup(pair, cpld);
 	cfg_setup(pair, on, off, wdt, cpld);
 	cpld_trigger(pair, cpld);
+}
+
+/*
+ * sio_pair_setup(), setup the Pair.
+ *
+ * pair_g[0] --> Pair1
+ * pair_g[1] --> Pair2
+ * pair_g[2] --> Pair3
+ *
+ * If pair = 2, d'2 -> b'010, bit0 is 0, bit1 is 1, bit2 is 0, 
+ * so pair_g[2] = 0 
+ *    pair_g[1] = 1 
+ *    pair_g[0] = 0
+ *
+ * if pair = 3, d'5 -> b'011, bit0 is 1, bit1 is 1, bit2 is 0, 
+ * so pair_g[2] = 0
+ *    pair_g[1] = 1
+ *    pair+g[0] = 1.
+ */
+void sio_pair_setup(int pair, struct cpld_cfg *cpld)
+{
+	int i, n = 0;
+
+	pair -= 1; /* make pair from 1 ~ 8 to 0 ~ 7 */
+
+	/* For S0961, it use different GPIOs for Pair1/2, Pair3/4 and Pair5/6 */
+	if (total_pair_pin_num == 9) {
+		n = pair / 2;
+		DBG("n = %d\n", n);
+	}
+
+	DBG("\n");
+	for (i = 0; i < PAIR_GPIO_NUM; i++)
+		f71889ad_gpio_dir_out(cpld->pair_g[n * PAIR_GPIO_NUM + i], (pair >> i) & 0x1);
+}
+
+/*
+ * sio_cfg_setup(), setup the CFG.
+ *
+ * cfg_g[0] --> CFG1: Watch Dog Timer, 0 for Reset       , 1 for Bypass.
+ * cfg_g[1] --> CFG2: OFF            , 0 for Pass Through, 1 for Bypass.
+ * cfg_g[2] --> CFG3: ON             , 0 for Pass Through, 1 for Bypass.
+ */
+void sio_cfg_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
+{
+	int n = 0;
+
+	if (total_pair_pin_num == 9) {
+		n = ((pair - 1) / 2) * 3;
+		DBG("n = %d\n", n);
+	}
+
+	DBG("\n");
+	f71889ad_gpio_dir_out(cpld->cfg_g[n + 0], wdt);
+	f71889ad_gpio_dir_out(cpld->cfg_g[n + 1], off);
+	f71889ad_gpio_dir_out(cpld->cfg_g[n + 2], on);
+}
+
+/*
+ * sio_cpld_trigger(), trigger the sendbit.
+ *
+ * The sendbit is falling-edge trigger, the delay time must 
+ * longer than 100ms.
+ */
+void sio_cpld_trigger(int pair, struct cpld_cfg *cpld)
+{
+	int n = 0;
+	
+	if (total_pair_pin_num == 9) {
+		n = (pair - 1) / 2;
+		DBG("n = %d\n", n);
+	}
+
+	DBG("\n");
+	f71889ad_gpio_dir_out(cpld->sendbit[n], GPIO_LOW);
+	usleep(CPLD_DELAY);
+	f71889ad_gpio_dir_out(cpld->sendbit[n], GPIO_HIGH);
+	usleep(CPLD_DELAY);
+	f71889ad_gpio_dir_out(cpld->sendbit[n], GPIO_LOW);
+}
+
+void sio_bypass_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
+{
+	sio_pair_setup(pair, cpld);
+	sio_cfg_setup(pair, on, off, wdt, cpld);
+	sio_cpld_trigger(pair, cpld);
+}
+
+/* get gpio direction index, gpio data index = direction index + 1 */
+int f71889ad_get_gpio_dir_index(int gpio)
+{
+	if (gpio >= 0 && gpio <= 6)
+		return 0xF0;
+	else if (gpio >= 10 && gpio <= 16)
+		return 0xE0;
+	else if (gpio >= 25 && gpio <= 27)
+		return 0xD0;
+	else if (gpio >= 30 && gpio <= 37)
+		return 0xC0;
+	else if (gpio >= 40 && gpio <= 47)
+		return 0xB0;
+	else if (gpio >= 50 && gpio <= 54)
+		return 0xA0;
+	else if (gpio >= 60 && gpio <= 67)
+		return 0x90;
+	else if (gpio >= 70 && gpio <= 77)
+		return 0x80;
+}
+
+/* TODO: this function needs to merge to sio_gpio_dir_out() in libsio.c */
+void f71889ad_gpio_dir_out(int gpio, int value)
+{
+	int buf, dir_index;
+
+	dir_index = f71889ad_get_gpio_dir_index(gpio);
+	DBG("dir_index = %x\n", dir_index);
+
+	/* set direction */
+	buf = sio_read(dir_index);
+	buf |= (0x1 << (gpio % 10));
+	sio_write(dir_index, buf);
+
+	/* set data */
+	buf = sio_read(dir_index + 1);
+	DBG("buf = %x\n", buf);
+	buf &= ~(0x1 << (gpio % 10));
+	DBG("value = %d, offset = %d\n", value, gpio % 10);
+	buf |= (value << (gpio % 10));
+	sio_write(dir_index + 1, buf);
 }
 
 void usage(void)

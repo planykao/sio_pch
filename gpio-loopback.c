@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
 		fscanf(fp, "%d %d", &pin1, &pin2);
 		printf("Testing GPIO[%d] and GPIO[%d]...\n", pin1, pin2);
 
-		if ( strcmp("PCH", str) == 0 ) { /* test gpio via PCH */
+		if (strcmp("PCH", str) == 0) { /* test gpio via PCH */
 			if (gpio_set_then_read(pin1, pin2, GPIO_LOW) == -1)
 				exit(1);
 			if (gpio_set_then_read(pin1, pin2, GPIO_HIGH) == -1)

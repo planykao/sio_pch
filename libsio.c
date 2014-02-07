@@ -71,7 +71,7 @@ void sio_gpio_enable(int ldnum)
 	/* Read the value of CR 30h of Logical device 9 */
 	b = sio_read(SIO_ENABLE_REG);
 	DBG("b = %x\n", b);
-	b |= SIO_GPIO7_EN_OFFSET; /* Set bit7 to 1 to enable GPIO7 Group */
+	b |= SIO_GPIO7_ENABLE; /* Set bit7 to 1 to enable GPIO7 Group */
 	/* Write the value at CR 30h of Logical device 9 */
 	sio_write(SIO_ENABLE_REG, b); 
 }

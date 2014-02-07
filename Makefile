@@ -26,7 +26,7 @@ CHANGELOG = Changelog
 GPIO_OBJS = libpch.o libsio.o
 HWMON_OBJS = libsio.o
 BP_OBJS = libpch.o libsio.o
-WDT_OBJS = libpch.o libsio.o
+WDT_OBJS = libsio.o
 
 GIT = $(shell which git > /dev/null 2>&1; echo $$?)
 
@@ -52,7 +52,7 @@ hwmon: $(HWMON_OBJS) $(HWMON).c
 bypass: $(BP_OBJS) $(BYPASS).c
 	$(CC) $(CFLAGS) $(BP_OBJS) $(BYPASS).c -o $(BYPASS)
 
-wdt: $(BP_OBJS) $(WDT).c
+wdt: $(WDT_OBJS) $(WDT).c
 	$(CC) $(CFLAGS) $(WDT_OBJS) $(WDT).c -o $(WDT)
 
 libpch.o: $(LIBPCH)

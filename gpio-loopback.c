@@ -1,8 +1,3 @@
-/* 
- * GPIO loop back testing.
- * Support S0211, S0981, S0961 with PCH, and S0361 with SuperIO.
- */
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -15,25 +10,6 @@
 #include <sitest.h>
 #include <libpch.h>
 #include <libsio.h>
-
-#if 0
-struct board_list
-{
-	char name[10];
-	unsigned long int base_addr;
-};
-
-/* Support list */
-struct board_list list[] = {
-	{ "S0981", 0x1C00 }, /* 0x1C00 for Haswell */
-	{ "S0961", 0x1C00 },
-	{ "S0101", 0x500 }, /* 0x500 for Sandy/Ivy Briddge */
-	{ "S0381", 0x500 },
-	{ "S0211", 0x500 },
-	{ "S0571", 0 }, /* SIO */
-	{ "S0361", 0 }
-};
-#endif
 
 static int gpio_set_then_read(int gpio_out, int gpio_in, int value);
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value);
@@ -106,23 +82,6 @@ static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value)
 	}
 }
 
-#if 0
-static int check_board_list(char *file_name)
-{
-	int i;
-
-	for (i = 0; i < (sizeof(list) / sizeof(list[0])); i++) {
-		if (strncmp(file_name, list[i].name, 5) == 0) {
-			base_addr = list[i].base_addr;
-			DBG("base_addr = %x\n", base_addr);
-			return 0;
-		}
-	}
-
-	return -1;
-}
-#endif
-
 int main(int argc, char *argv[])
 {
 	int i, total, pin1, pin2;
@@ -148,13 +107,6 @@ int main(int argc, char *argv[])
 		printf("Usage: COMMAND FILE_NAME\n");
 		exit(-1);
 	}
-
-#if 0
-	if (check_board_list(argv[1]) != 0) {
-		printf("We don't support this board yet.\n");
-		exit(-1);
-	}
-#endif
 
 	/* Skip the header */
 	fscanf(fp, "%*[^\n]\n", NULL);

@@ -60,11 +60,6 @@ void ast_cpld_trigger(unsigned long int data_offset, int offset);
 int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
                       struct gpio_groups *gg);
 
-unsigned char read_sio(int index);
-void write_sio(int index, unsigned char val_w);
-unsigned char read_reg(int lr, int hr);
-void write_reg(unsigned char val_w, int lw, int hw);
-
 int check_arguments(char *argv[], int *, int *, int *, int *);
 int read_config(char *, struct cpld_cfg *, struct ast_cpld_cfg *, char *);
 
@@ -632,7 +627,8 @@ void sio_pair_setup(int pair, struct cpld_cfg *cpld)
 
 	DBG("\n");
 	for (i = 0; i < PAIR_GPIO_NUM; i++)
-		f71889ad_gpio_dir_out(cpld->pair_g[n * PAIR_GPIO_NUM + i], (pair >> i) & 0x1);
+		f71889ad_gpio_dir_out(cpld->pair_g[n * PAIR_GPIO_NUM + i], \
+                              (pair >> i) & 0x1);
 }
 
 /*

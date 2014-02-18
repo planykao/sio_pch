@@ -1,7 +1,18 @@
+2014/02/07
+    commit 9eb87133706c5f28ba25e46350ab5012075d6a6d
+    Bypass test program and configuration files are finish, release to Bill.
+
+2014/01/27
+    commit 4c41e34a59eb9336d5dc39df95c22beec0e86e01
+    Add configuration file for S0231, not test yet, no board. Release to Bill.
+
+    commit afd3e85a43164a59b536f778189bb09ddf5391a9
+    Add configuration files for S0121, S0221 and S0731, not test yet, cause I 
+    can't find these 3 boards to test.
+
 2014/01/24
     commit 7d4f3e29ca493153e394ee716e1f192f181e3d1f
 	Add 96E3 support, release to Bill.
 
-2014/01/24
     commit f0863d9c94efa6dc266badee4442f053f3313049
-    Hardware monitor is done, release code to Bill.
+    Hardware monitor is done.

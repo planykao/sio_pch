@@ -40,12 +40,14 @@ void sio_write(int reg, int val)
 	outb_p(val, EFDR); /* Send val_w at FEDR */
 }
 
+/* Read value from register of SuperIO */
 int sio_read_reg(int index, int address)
 {
 	outb_p(index, address);
 	return inb_p(address + 1);
 }
 
+/* Write value to register of SuperIO */
 void sio_write_reg(int index, int address)
 {
 	outb_p(index, address);
@@ -89,7 +91,8 @@ void sio_logical_device_enable(int bit)
 	sio_write(SIO_ENABLE_REG, b);
 }
 
-int sio_gpio_get(int gpio) {
+int sio_gpio_get(int gpio)
+{
 	return ((sio_read(SIO_GPIO7_DATA_REG) >> gpio) & 0x1);
 }
 

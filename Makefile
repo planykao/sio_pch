@@ -61,14 +61,6 @@ libpch.o: $(LIBPCH)
 libsio.o: $(LIBSIO)
 	$(CC) $(CFLAGS) -c $(LIBSIO)
 
-.PHONY: changelog
-changelog:
-ifeq ($(GIT), 1)
-	@echo "git not found, please install git first."
-else
-	git log > $(CHANGELOG)
-endif
-
 .PHONY: release	
 release:
 	mkdir -p $(RELEASEDIR)
@@ -78,6 +70,14 @@ release:
 	if [ -f $(BYPASS) ]; then cp -rf $(BYPASS) $(BP_RELEASE_DIR); fi
 	if [ -f $(HWMON) ]; then cp -rf $(HWMON) $(HWMON_RELEASE_DIR); fi
 	if [ -f $(WDT) ]; then cp -rf $(WDT) $(BP_RELEASE_DIR); fi
+
+.PHONY: changelog
+changelog:
+ifeq ($(GIT), 1)
+	@echo "git not found, please install git first."
+else
+	git log > $(CHANGELOG)
+endif
 
 .PHONY: clean
 clean:

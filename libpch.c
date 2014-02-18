@@ -4,6 +4,7 @@
 #include <libpch.h>
 #include <sitest.h>
 
+/* re-assign the gpio number */
 int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
                             unsigned long int *gp_io_sel_addr, \
                             unsigned long int *gp_lvl_addr, \

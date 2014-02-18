@@ -927,7 +927,7 @@ void pin_list(char *chip_model, struct sensor *sensors)
 			if (strcmp(sensors->name, "TEMP_BMC") == 0)
 				sensors->index = 0x90; /* device addres 0x90 */
 			else if (strcmp(sensors->name, "TEMP_ENV") == 0)
-				sensors->index = 0x98; /* device addres 0x90 */
+				sensors->index = 0x98; /* device addres 0x98 */
 			else {
 				ERR("Sensor name should be TEMP_BMC or TEMP_ENV\n");
 				exit(-1);

@@ -21,6 +21,8 @@
 #define NCT_WDT_CNT_MODE_1K_OFFSET 4
 #define NCT_WDT_STATUS_OFFSET      4
 
+#define GPIO7                      7
+
 /* for Fintek SuperIO */
 #define FINTEK_GPIO_LDN        0x06
 #define FIN_WDT_LDN            0x07
@@ -62,8 +64,9 @@ unsigned int SIO_DATA_REG_OFFSET; /* Data Port register offset */
 void sio_enter(char *chip);
 void sio_exit(void);
 
-void sio_gpio_enable(int ldnum);
+void sio_gpio_enable(int ldnum, int offset);
 void sio_logical_device_enable(int bit);
+int sio_gpio_calculate(int gpio);
 int sio_gpio_get(int gpio);
 void sio_gpio_set(int gpio, int value);
 void sio_gpio_dir_in(int gpio);

@@ -62,22 +62,6 @@ void sio_select(int ldnum)
 	outb_p(ldnum, EFDR);
 }
 
-void sio_gpio_enable(int ldnum)
-{
-	int b;
-	
-	/* CR 30h of Logical Device Number 9 is enable register for GPIO1~7 */
-	sio_select(ldnum);
-
-	/* Active GPIO7 Group */
-	/* Read the value of CR 30h of Logical device 9 */
-	b = sio_read(SIO_ENABLE_REG);
-	DBG("b = %x\n", b);
-	b |= SIO_GPIO7_ENABLE; /* Set bit7 to 1 to enable GPIO7 Group */
-	/* Write the value at CR 30h of Logical device 9 */
-	sio_write(SIO_ENABLE_REG, b); 
-}
-
 void sio_logical_device_enable(int bit)
 {
 	int b;
@@ -90,6 +74,34 @@ void sio_logical_device_enable(int bit)
 	/* Write the value to CR 30h of Logical device */
 	sio_write(SIO_ENABLE_REG, b);
 }
+
+void sio_gpio_enable(int ldnum, int offset)
+{
+	int b;
+	
+	/* CR 30h of Logical Device Number 9 is enable register for GPIO1~7 */
+	sio_select(ldnum);
+
+	/* Active GPIO7 Group */
+	/* Read the value of CR 30h of Logical device 9 */
+	b = sio_read(SIO_ENABLE_REG);
+	DBG("b = %x\n", b);
+//	b |= SIO_GPIO7_ENABLE; /* Set bit7 to 1 to enable GPIO7 Group */
+	b |= 0x1 << offset; /* Set bit7 to 1 to enable GPIO7 Group */
+	/* Write the value at CR 30h of Logical device 9 */
+	sio_write(SIO_ENABLE_REG, b); 
+}
+
+int sio_gpio_calculate(int gpio)
+{
+	if (gpio >= 70 && gpio <= 77)
+		return (gpio - 70);
+	else {
+		ERR("GPIO number incorrect.\n");
+		return -1;
+	}
+}
+
 
 int sio_gpio_get(int gpio)
 {

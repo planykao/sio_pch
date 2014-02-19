@@ -13,7 +13,7 @@
 
 static int gpio_set_then_read(int gpio_out, int gpio_in, int value);
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value);
-static int sio_gpio_calculate(int gpio);
+//static int sio_gpio_calculate(int gpio);
 
 unsigned long int base_addr;
 
@@ -47,6 +47,7 @@ static int gpio_set_then_read(int gpio_out, int gpio_in, int value)
 	}
 }
 
+#if 0
 static int sio_gpio_calculate(int gpio)
 {
 	if (gpio >= 70 && gpio <= 77)
@@ -56,20 +57,31 @@ static int sio_gpio_calculate(int gpio)
 		exit(-1);
 	}
 }
+#endif
 
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value)
 {
 	int new_gpio;
 
 	/* Enable GPIO7 group */
-	sio_gpio_enable(SIO_GPIO_EN_REG);
+	sio_gpio_enable(SIO_GPIO_EN_REG, GPIO7);
 	/* Select GPIO7 */
 	sio_select(SIO_GPIO7_LDN);
 
 	new_gpio = sio_gpio_calculate(gpio_out);
+	if (new_gpio == -1) {
+		ERR("GPIO number incorrect.\n");
+		exit(-1);
+	}
+
 	sio_gpio_dir_out(new_gpio, value);
 
 	new_gpio = sio_gpio_calculate(gpio_in);
+	if (new_gpio == -1) {
+		ERR("GPIO number incorrect.\n");
+		exit(-1);
+	}
+
 	sio_gpio_dir_in(new_gpio);
 
 	printf("GPIO[%d] output %d to GPIO[%d] test ", gpio_out, value, gpio_in);

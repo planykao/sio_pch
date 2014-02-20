@@ -12,6 +12,31 @@
 #define SIO_GPIO7_LDN              0x07
 
 /* for Nuvoton SuperIO */
+#define NCT_GPIO_IN                1
+#define NCT_GPIO_OUT               0
+#define NCT_GPIO0_EN_LDN           0x08
+#define NCT_GPIO0_LDN              0x08
+#define NCT_GPIO1_EN_LDN           0x09
+#define NCT_GPIO1_LDN              0x08
+#define NCT_GPIO2_EN_LDN           0x09
+#define NCT_GPIO2_LDN              0x09
+#define NCT_GPIO3_EN_LDN           0x09
+#define NCT_GPIO3_LDN              0x09
+#define NCT_GPIO4_EN_LDN           0x09
+#define NCT_GPIO4_LDN              0x09
+#define NCT_GPIO6_EN_LDN           0x09
+#define NCT_GPIO5_LDN              0x09
+#define NCT_GPIO6_EN_LDN           0x09
+#define NCT_GPIO6_LDN              0x07
+#define NCT_GPIO7_EN_LDN           0x09
+#define NCT_GPIO7_LDN              0x07
+#define NCT_GPIO8_EN_LDN           0x07
+#define NCT_GPIO8_LDN              0x07
+#define NCT_GPIO9_EN_LDN           0x07
+#define NCT_GPIO9_LDN              0x07
+#define NCT_GPIOA_EN_LDN           0x08
+#define NCT_GPIOA_LDN              0x08
+
 #define NCT_WDT_LDN                0x08
 #define NCT_WDT_EN                 0
 #define NCT_WDT_CTL_MODE_REG       0xF5
@@ -24,6 +49,8 @@
 #define GPIO7                      7
 
 /* for Fintek SuperIO */
+#define FINTEK_GPIO_IN         0
+#define FINTEK_GPIO_OUT        1
 #define FINTEK_GPIO_LDN        0x06
 #define FIN_WDT_LDN            0x07
 #define FIN_WDT_CONF_REG       0xF0
@@ -66,11 +93,10 @@ void sio_exit(void);
 
 void sio_gpio_enable(int ldnum, int offset);
 void sio_logical_device_enable(int bit);
-int sio_gpio_calculate(int gpio);
-int sio_gpio_get(int gpio);
-void sio_gpio_set(int gpio, int value);
-void sio_gpio_dir_in(int gpio);
-void sio_gpio_dir_out(int gpio, int value);
+int sio_gpio_get(int gpio, int index);
+void sio_gpio_set(int gpio, int value, int index);
+void sio_gpio_dir_in(int gpio, int index, int io);
+void sio_gpio_dir_out(int gpio, int value, int index, int io);
 
 int sio_read(int reg);
 void sio_write(int reg, int val);
@@ -82,4 +108,9 @@ void sio_select(int ldnum);
 void sio_ilpc2ahb_setup(void);
 void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
 unsigned int sio_ilpc2ahb_read(int lr, int hr);
+
+int f71889ad_get_gpio_dir_index(int gpio);
+int nct_get_gpio_dir_index(int gpio);
+int sio_get_gpio_dir_index(char *chip, int gpio);
+
 #endif

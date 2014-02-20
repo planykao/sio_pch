@@ -12,8 +12,7 @@
 #include <libsio.h>
 
 static int gpio_set_then_read(int gpio_out, int gpio_in, int value);
-static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value);
-//static int sio_gpio_calculate(int gpio);
+static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *chip);
 
 unsigned long int base_addr;
 
@@ -38,7 +37,7 @@ static int gpio_set_then_read(int gpio_out, int gpio_in, int value)
 	DBG("gpio_sel_addr = %x, gp_lvl_addr =%x\n", gp_io_sel_addr, gp_lvl_addr);
 
 	printf("GPIO[%d] output %d to GPIO[%d] test ", gpio_out, value, gpio_in);
-	if (gpio_get(gp_lvl_addr, new_gpio) == value) {
+	if (gpio_get(gp_lvl_addr, gpio_in) == value) {
 		printf("PASS!\n");
 		return 0;
 	} else {
@@ -47,45 +46,23 @@ static int gpio_set_then_read(int gpio_out, int gpio_in, int value)
 	}
 }
 
-#if 0
-static int sio_gpio_calculate(int gpio)
+static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *chip)
 {
-	if (gpio >= 70 && gpio <= 77)
-		return (gpio - 70);
-	else {
-		ERR("GPIO number incorrect.\n");
-		exit(-1);
-	}
-}
-#endif
-
-static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value)
-{
-	int new_gpio;
+	int new_gpio, index;
 
 	/* Enable GPIO7 group */
-	sio_gpio_enable(SIO_GPIO_EN_REG, GPIO7);
+	sio_gpio_enable(NCT_GPIO7_EN_LDN, GPIO7);
 	/* Select GPIO7 */
-	sio_select(SIO_GPIO7_LDN);
+	sio_select(NCT_GPIO7_LDN);
 
-	new_gpio = sio_gpio_calculate(gpio_out);
-	if (new_gpio == -1) {
-		ERR("GPIO number incorrect.\n");
-		exit(-1);
-	}
-
-	sio_gpio_dir_out(new_gpio, value);
-
-	new_gpio = sio_gpio_calculate(gpio_in);
-	if (new_gpio == -1) {
-		ERR("GPIO number incorrect.\n");
-		exit(-1);
-	}
-
-	sio_gpio_dir_in(new_gpio);
+	index = sio_get_gpio_dir_index(chip, gpio_out);
+	sio_gpio_dir_out(gpio_out, value, index, NCT_GPIO_OUT);
+	
+	index = sio_get_gpio_dir_index(chip, gpio_out);
+	sio_gpio_dir_in(gpio_in, index, NCT_GPIO_IN);
 
 	printf("GPIO[%d] output %d to GPIO[%d] test ", gpio_out, value, gpio_in);
-	if (sio_gpio_get(new_gpio) == value) {
+	if (sio_gpio_get(gpio_in, index) == value) {
 		printf("PASS!\n");
 		return 0;
 	} else {
@@ -98,7 +75,7 @@ int main(int argc, char *argv[])
 {
 	int i, total, pin1, pin2;
 	FILE *fp;
-	char str[10];
+	char chip[10];
 
 	/* 
 	 * Change I/O privilege level to all access. For Linux only. 
@@ -127,15 +104,16 @@ int main(int argc, char *argv[])
 	fscanf(fp, "%*[^\n]\n", NULL);
 
 	/* Read chip set and gpio base addr */
-	fscanf(fp, "%s %x", str, &base_addr);
+	fscanf(fp, "%s %x", chip, &base_addr);
 
-	if (strcmp("SIO", str) == 0) {
+	/* Assign EFER and EFDR for SuperIO */
+	if (strncmp("PCH", chip, 3) != 0) {
 		EFER = base_addr;
-		EFDR = base_addr + 1;
+		EFDR = EFER + 1;
 	}
 
-	DBG("str = %s, base_addr = %x, EFER = %x, EFDR = %x\n", \
-         str, base_addr, EFER, EFDR);
+	DBG("chip = %s, base_addr = %x, EFER = %x, EFDR = %x\n", \
+         chip, base_addr, EFER, EFDR);
 
 	fscanf(fp, "%d\n", &total);
 
@@ -145,7 +123,7 @@ int main(int argc, char *argv[])
 		fscanf(fp, "%d %d", &pin1, &pin2);
 		printf("Testing GPIO[%d] and GPIO[%d]...\n", pin1, pin2);
 
-		if (strcmp("PCH", str) == 0) { /* test gpio via PCH */
+		if (strcmp("PCH", chip) == 0) { /* test gpio via PCH */
 			if (gpio_set_then_read(pin1, pin2, GPIO_LOW) == -1)
 				exit(1);
 			if (gpio_set_then_read(pin1, pin2, GPIO_HIGH) == -1)
@@ -156,13 +134,13 @@ int main(int argc, char *argv[])
 				exit(1);
 		} else { /* test gpio via SIO */
 			sio_enter(argv[1]);
-			if (sio_gpio_set_then_read(pin1, pin2, GPIO_LOW) == -1)
+			if (sio_gpio_set_then_read(pin1, pin2, GPIO_LOW, chip) == -1)
 				exit(1);
-			if (sio_gpio_set_then_read(pin1, pin2, GPIO_HIGH) == -1)
+			if (sio_gpio_set_then_read(pin1, pin2, GPIO_HIGH, chip) == -1)
 				exit(1);
-			if (sio_gpio_set_then_read(pin2, pin1, GPIO_LOW) == -1)
+			if (sio_gpio_set_then_read(pin2, pin1, GPIO_LOW, chip) == -1)
 				exit(1);
-			if (sio_gpio_set_then_read(pin2, pin1, GPIO_HIGH) == -1)
+			if (sio_gpio_set_then_read(pin2, pin1, GPIO_HIGH, chip) == -1)
 				exit(1);
 			sio_exit();
 		}

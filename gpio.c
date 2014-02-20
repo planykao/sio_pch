@@ -2,13 +2,13 @@
  * Set GPIOs direction to output and pull high or low.
  *
  * Usage: 
- *     # ./gpio -c CONFIG -g GPIOs -o HIGH/LOW
+ *     # ./gpio -c CONFIG -g GPIOs -o 1/0
  *
  * For example, set GPIO70 to HIGH on S0361: 
- *     # ./gpio -c S0361.conf -g 70 -o high
+ *     # ./gpio -c S0361.conf -g 70 -o 1
  *
  * Set GPIO72 to LOW on S0361:
- *     # ./gpio -c S0361.conf -g 72 -o low
+ *     # ./gpio -c S0361.conf -g 72 -o 0
  */
 
 #include <stdio.h>
@@ -23,7 +23,7 @@
 void usage(int);
 int read_config(char *, char *, unsigned int *);
 static void gpio_config(int, int, unsigned int);
-static void sio_gpio_config(int, int);
+static void sio_gpio_config(int, int, char *);
 
 int total;
 
@@ -54,7 +54,6 @@ int main(int argc, char *argv[])
 				level = atoi(optarg);
 				break;
 			case ':':
-				break;
 			case 'h':
 			case '?':
 				usage(1);
@@ -64,7 +63,7 @@ int main(int argc, char *argv[])
 
 #ifdef DEBUG
 	DBG("filename = %s\n", filename);
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < total; i++)
 		DBG("gpio[%d] = %d\n", i, gpio[i]);
 	DBG("level = %d\n", level);
 #endif
@@ -85,7 +84,7 @@ int main(int argc, char *argv[])
 		for (i = 0; i < total; i++) {
 			EFER = gpio_base_addr;
 			EFDR = EFER + 1;
-			sio_gpio_config(gpio[i], level);
+			sio_gpio_config(gpio[i], level, chip);
 		}
 	}
 	/* test end */
@@ -149,22 +148,16 @@ static void gpio_config(int gpio, int level, unsigned int gpio_base_addr)
 	printf("Set GPIO[%d] Level to %s\n", gpio, level ? "HIGH" : "LOW");
 }
 
-static void sio_gpio_config(int gpio, int level)
+static void sio_gpio_config(int gpio, int level, char *chip)
 {
-	int new_gpio;
+	int index;
 
 	/* Enable GPIO7 group */
-	sio_gpio_enable(SIO_GPIO_EN_REG, GPIO7);
+	sio_gpio_enable(NCT_GPIO7_EN_LDN, GPIO7);
 	/* Select GPIO7 */
-	sio_select(SIO_GPIO7_LDN);
-
-	new_gpio = sio_gpio_calculate(gpio);
-	if (new_gpio == -1) {
-		ERR("GPIO number incorrect.\n");
-		exit(-1);
-	}
-
-	sio_gpio_dir_out(new_gpio, level);
+	sio_select(NCT_GPIO7_LDN);
+	index = sio_get_gpio_dir_index(chip, gpio);
+	sio_gpio_dir_out(gpio, level, index, NCT_GPIO_OUT);
 
 	printf("Set GPIO[%d] Level to %s\n", gpio, level ? "HIGH" : "LOW");
 }

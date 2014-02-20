@@ -6,9 +6,11 @@ INCLUDE = ${PWD}/
 
 # directory
 CONFDIR = ${PWD}/conf
+LP_CONF_DIR = $(CONFDIR)/loopback
 SCRIPTDIR = ${PWD}/script
 RELEASEDIR = ${PWD}/release
 LP_RELEASE_DIR = $(RELEASEDIR)/loopback
+GPIO_RELEASE_DIR = $(RELEASEDIR)/gpio
 BP_RELEASE_DIR = $(RELEASEDIR)/bypass
 HWMON_RELEASE_DIR = $(RELEASEDIR)/hwmon
 
@@ -68,11 +70,16 @@ libsio.o: $(LIBSIO)
 
 .PHONY: release	
 release:
-	mkdir -p $(RELEASEDIR)
+	@mkdir -p $(RELEASEDIR)
+	@mkdir -p $(LP_RELEASE_DIR)
+	@mkdir -p $(GPIO_RELEASE_DIR)
+	@mkdir -p $(BP_RELEASE_DIR)
+	@mkdir -p $(HWMON_RELEASE_DIR)
 	cp -rf $(CONFDIR)/* $(RELEASEDIR)
 	cp -rf $(SCRIPTDIR)/* $(RELEASEDIR)
 	if [ -f $(LOOPBACK) ]; then cp -rf $(LOOPBACK) $(LP_RELEASE_DIR); fi
-	if [ -f $(GPIO) ]; then cp -rf $(GPIO) $(GPIO_RELEASE_DIR); fi
+	if [ -f $(GPIO) ]; then cp -rf $(GPIO) $(GPIO_RELEASE_DIR); \
+	cp -rf $(LP_CONF_DIR)/* $(GPIO_RELEASE_DIR); fi
 	if [ -f $(BYPASS) ]; then cp -rf $(BYPASS) $(BP_RELEASE_DIR); fi
 	if [ -f $(HWMON) ]; then cp -rf $(HWMON) $(HWMON_RELEASE_DIR); fi
 	if [ -f $(WDT) ]; then cp -rf $(WDT) $(BP_RELEASE_DIR); fi

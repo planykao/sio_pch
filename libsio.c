@@ -75,6 +75,11 @@ void sio_logical_device_enable(int bit)
 	sio_write(SIO_ENABLE_REG, b);
 }
 
+/* 
+ * sio_gpio_enable(), select Logical Device Number and enable for input GPIO.
+ * ldnum, logical device number
+ * offset, enable bit offset
+ */
 void sio_gpio_enable(int ldnum, int offset)
 {
 	int b;
@@ -86,58 +91,82 @@ void sio_gpio_enable(int ldnum, int offset)
 	/* Read the value of CR 30h of Logical device 9 */
 	b = sio_read(SIO_ENABLE_REG);
 	DBG("b = %x\n", b);
-//	b |= SIO_GPIO7_ENABLE; /* Set bit7 to 1 to enable GPIO7 Group */
 	b |= 0x1 << offset; /* Set bit7 to 1 to enable GPIO7 Group */
 	/* Write the value at CR 30h of Logical device 9 */
 	sio_write(SIO_ENABLE_REG, b); 
 }
 
-int sio_gpio_calculate(int gpio)
+/*
+ * sio_gpio_get(), get data from GPIO.
+ * index is direction register, data register = direction index + 1
+ */
+int sio_gpio_get(int gpio, int index)
 {
-	if (gpio >= 70 && gpio <= 77)
-		return (gpio - 70);
-	else {
-		ERR("GPIO number incorrect.\n");
-		return -1;
-	}
+	return ((sio_read(index + 1) >> (gpio % 10)) & 0x1);
 }
 
-
-int sio_gpio_get(int gpio)
-{
-	return ((sio_read(SIO_GPIO7_DATA_REG) >> gpio) & 0x1);
-}
-
-void sio_gpio_set(int gpio, int value)
+/*
+ * sio_gpio_set(), set data to GPIO.
+ * index is direction register, data register = direction index + 1
+ */
+void sio_gpio_set(int gpio, int value, int index)
 {
 	int b;
 
-	b = sio_read(SIO_GPIO7_DATA_REG);
-	b &= ~(0x1 << gpio); /* clear */
-	b |= (value << gpio);
-	sio_write(SIO_GPIO7_DATA_REG, b);
+	b = sio_read(index + 1); /* data index = dir index + 1*/
+	b &= ~(0x1 << (gpio % 10)); /* clear */
+	b |= (value << (gpio % 10));
+	sio_write(index + 1, b);
 }
 
-void sio_gpio_dir_in(int gpio)
+/*
+ * sio_gpio_dir_in(), set gpio to input.
+ * Nuvoton: 0 is output, 1 is input.
+ * Fintek:  1 is output, 0 is input.
+ *
+ * io, input, use the following to make it more readable:
+ *
+ * NCT_GPIO_IN    1
+ * FIN_GPIO_IN    0
+ *
+ * i.e., sio_gpio_dir_in(gpio, index, NCT_GPIO_IN)
+ *       sio_gpio_dir_in(gpio, index, FIN_GPIO_IN)
+ */
+void sio_gpio_dir_in(int gpio, int index, int io)
 {
 	int b;
 
-	b = sio_read(SIO_GPIO7_DIR_REG);
-	b |= (0x1 << gpio); /* set 1 for input */
-	sio_write(SIO_GPIO7_DIR_REG, b);
+	b = sio_read(index);
+	b &= ~(0x1 << (gpio % 10)); /* set 1 for input */
+	b |= (io << (gpio % 10)); /* set 1 for input */
+	sio_write(index, b);
 }
 
-void sio_gpio_dir_out(int gpio, int value)
+/*
+ * sio_gpio_dir_out(), set gpio to output and pull HIGH or LOW
+ * Nuvoton: 0 is output, 1 is input.
+ * Fintek:  1 is output, 0 is input.
+ *
+ * io, output, use the following to make it more readable:
+ *
+ * NCT_GPIO_OUT    0
+ * FIN_GPIO_OUT    1
+ *
+ * i.e., sio_gpio_dir_in(gpio, index, NCT_GPIO_OUT)
+ *       sio_gpio_dir_in(gpio, index, FIN_GPIO_OUT)
+ */
+void sio_gpio_dir_out(int gpio, int value, int index, int io)
 {
 	int b;
 
 	/* direction */
-	b = sio_read(SIO_GPIO7_DIR_REG);
-	b &= ~(0x1 << gpio); /* clear to 0 for output */
-	sio_write(SIO_GPIO7_DIR_REG, b);
+	b = sio_read(index);
+	b &= ~(0x1 << (gpio % 10)); /* clear to 0 for output */
+	b |= (io << (gpio % 10));
+	sio_write(index, b);
 
 	/* data */
-	sio_gpio_set(gpio, value);
+	sio_gpio_set(gpio, value, index);
 }
 
 /*
@@ -220,4 +249,69 @@ void sio_ilpc2ahb_setup(void)
 	sio_write(0xF8, b);
 }
 /* For AST1300 end */
+
+/* 
+ * f71889ad_get_gpio_dir_index(), get gpio direction index for F71889AD.
+ * gpio data index = direction index + 1
+ */
+int f71889ad_get_gpio_dir_index(int gpio)
+{
+	if (gpio >= 0 && gpio <= 6)
+		return 0xF0;
+	else if (gpio >= 10 && gpio <= 16)
+		return 0xE0;
+	else if (gpio >= 25 && gpio <= 27)
+		return 0xD0;
+	else if (gpio >= 30 && gpio <= 37)
+		return 0xC0;
+	else if (gpio >= 40 && gpio <= 47)
+		return 0xB0;
+	else if (gpio >= 50 && gpio <= 54)
+		return 0xA0;
+	else if (gpio >= 60 && gpio <= 67)
+		return 0x90;
+	else if (gpio >= 70 && gpio <= 77)
+		return 0x80;
+}
+
+/* 
+ * nct_get_gpio_dir_index(), get gpio direction index for Nuvoton SuperIO.
+ * gpio data index = direction index + 1
+ */
+int nct_get_gpio_dir_index(int gpio)
+{
+	if (gpio >= 0 && gpio <= 5) /* GPIO0, Logical Device 8 */
+		return 0xE0;
+	else if (gpio >= 10 && gpio <= 17) /* GPIO1, Logical Device 8 */
+		return 0xF0;
+	else if (gpio >= 20 && gpio <= 27) /* GPIO2, Logical Device 9 */
+		return 0xE0;
+	else if (gpio >= 30 && gpio <= 37) /* GPIO3, Logical Device 9 */
+		return 0xE4;
+	else if (gpio >= 40 && gpio <= 47) /* GPIO4, Logical Device 9 */
+		return 0xF0;
+	else if (gpio >= 50 && gpio <= 54) /* GPIO5, Logical Device 9 */
+		return 0xF4;
+	else if (gpio >= 60 && gpio <= 67) /* GPIO6, Logical Device 7 */
+		return 0xF4;
+	else if (gpio >= 70 && gpio <= 77) /* GPIO7, Logical Device 7 */
+		return 0xE0;
+	else if (gpio >= 80 && gpio <= 87) /* GPIO8, Logical Device 7 */
+		return 0xE4;
+	else if (gpio >= 90 && gpio <= 97) /* GPIO9, Logical Device 7 */
+		return 0xE8;
+	else if (gpio == 100) /* GPIOA, Logical Device 8 */
+		return 0xE0;
+}
+
+/*
+ * sio_get_gpio_dir_index(), get gpio direction index for SupereIO
+ */
+int sio_get_gpio_dir_index(char *chip, int gpio)
+{
+	if (strncmp(chip, "F71889AD", 8) == 0)
+		return f71889ad_get_gpio_dir_index(gpio);
+	else if (strncmp(chip, "NCT", 3) == 0)
+		return nct_get_gpio_dir_index(gpio);
+}
 

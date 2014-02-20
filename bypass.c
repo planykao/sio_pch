@@ -49,7 +49,7 @@ void sio_pair_setup(int pair, struct cpld_cfg *cpld);
 void sio_cfg_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld);
 void sio_cpld_trigger(int pair, struct cpld_cfg *cpld);
 void sio_bypass_setup(int pair,int on, int off, int wdt, struct cpld_cfg *cpld);
-int f71889ad_get_gpio_dir_index(int gpio);
+//int f71889ad_get_gpio_dir_index(int gpio);
 void f71889ad_gpio_dir_out(int gpio, int value);
 
 int ast_get_gpio_offset(char *pair_g, struct gpio_groups *gg);
@@ -683,6 +683,7 @@ void sio_bypass_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
 	sio_cpld_trigger(pair, cpld);
 }
 
+#if 0
 /* get gpio direction index, gpio data index = direction index + 1 */
 int f71889ad_get_gpio_dir_index(int gpio)
 {
@@ -703,6 +704,7 @@ int f71889ad_get_gpio_dir_index(int gpio)
 	else if (gpio >= 70 && gpio <= 77)
 		return 0x80;
 }
+#endif
 
 /* TODO: this function needs to merge to sio_gpio_dir_out() in libsio.c */
 void f71889ad_gpio_dir_out(int gpio, int value)

@@ -5,22 +5,25 @@ conf -- put all configuration files here.
       |-- bypass
       |-- hwmon
       |-- loopback
-gpio-loopback.c - gpio loopback test program.
-hwm.conf - hardware monitor configuration file, it will move to conf/hwmon/ 
-           when hardware monitor test program gets ready.
-hwmon.c - hardware monitor test program.
-Makefile - make file.
-libpch.c - library for PCH.
-libpch.h - header file for PCH library.
-README - this file.
-release - release directory
+
+loopback.c - gpio loopback test program.
+gpio.c     - for SIT only, set the GPIOs to output and pull high or low.
+hwm.conf   - hardware monitor configuration file, it will move to conf/hwmon/ 
+             when hardware monitor test program gets ready.
+hwmon.c    - hardware monitor test program.
+Makefile   - make file.
+libpch.c   - library for PCH.
+libpch.h   - header file for PCH library.
+README     - this file.
+release    - release directory
 script -- script directory
         |-- bypass
         |-- hwmon
         |-- gpio
-libsio.c - library for SIO.
-libsio.h - header file for SIO library.
-sitest.h - global header file.
+
+libsio.c   - library for SIO.
+libsio.h   - header file for SIO library.
+sitest.h   - global header file.
 
 
 HOW TO BUILD TEST PROGRAM

@@ -14,7 +14,7 @@
 
 #define PAIR_GPIO_NUM 3
 #define AST_GPIO_NUM  19
-#define CPLD_DELAY    200000 /* micro second */
+#define CPLD_DELAY    500000 /* micro second */
 
 struct cpld_cfg
 {
@@ -114,8 +114,6 @@ int main(int argc, char *argv[])
 		sio_enter(chip);
 
 		if (strncmp(chip, "AST", 3) == 0) {
-			sio_ilpc2ahb_setup();
-
 			struct gpio_groups gg[AST_GPIO_NUM] = {
 				{'A', 0x00, 0x04}, {'B', 0x01, 0x05}, \
                 {'C', 0x02, 0x06}, {'D', 0x03, 0x07}, \

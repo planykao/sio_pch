@@ -105,8 +105,9 @@ void sio_write_reg(int index, int address);
 void sio_select(int ldnum);
 
 /* For AST1300 */
-void sio_ilpc2ahb_setup(void);
+void sio_ilpc2ahb_setup(int len);
 void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
+void sio_ilpc2ahb_writel(unsigned int val_w, unsigned int lw, unsigned int hw);
 unsigned int sio_ilpc2ahb_read(int lr, int hr);
 
 int f71889ad_get_gpio_dir_index(int gpio);

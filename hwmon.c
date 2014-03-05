@@ -218,7 +218,6 @@ int main(int argc, unsigned char *argv[])
 		 * Always access AST1300 with SuperIO protocol, so do not exit 
 		 * Entended Function Mode.
 		 */
-		sio_ilpc2ahb_setup();
 		init_peci();
 	} else {
 		/* Read HW monitor base address */

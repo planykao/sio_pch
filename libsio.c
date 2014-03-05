@@ -204,12 +204,13 @@ unsigned int sio_ilpc2ahb_read(int lr, int hr)
 	 */
 	b = sio_read(0xF7 - mod); /* Get the value */
 
-	DBG("b = %x\n", b);
 	return b;
 }
 
 void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 {
+	
+	sio_ilpc2ahb_setup(0); /* Setup iLPC2AHB and set data length to 1 bytes */
 	/* 
 	 * Setup address
 	 * 0xF0: SIO iLPC2AHB address bit[31:24]
@@ -235,7 +236,41 @@ void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 	sio_write(0xFE, 0xCF);
 }
 
-void sio_ilpc2ahb_setup(void)
+void sio_ilpc2ahb_writel(unsigned int val_w, unsigned int lw, unsigned int hw)
+{
+	unsigned int value, addr;
+
+	sio_ilpc2ahb_setup(2); /* Setup iLPC2AHB and set data length to 4 bytes */
+	/* 
+	 * Setup address
+	 * 0xF0: SIO iLPC2AHB address bit[31:24]
+	 * 0xF1: SIO iLPC2AHB address bit[23:16]
+	 * 0xF2: SIO iLPC2AHB address bit[15:8]
+	 * 0xF3: SIO iLPC2AHB address bit[7:0]
+	 */
+	sio_write(0xF0, hw >> 8);
+	sio_write(0xF1, hw & 0xFF);
+	sio_write(0xF2, lw >> 8);
+	sio_write(0xF3, lw & 0xFF);
+
+	/*
+	 * Write data
+	 * 0xF4: SIO iLPC2AHB data bit[31:24]
+	 * 0xF5: SIO iLPC2AHB data bit[23:16]
+	 * 0xF6: SIO iLPC2AHB data bit[15:8]
+	 * 0xF7: SIO iLPC2AHB data bit[7:0]
+	 */
+	sio_write(0xF4, (val_w >> 24) & 0xFF);
+	sio_write(0xF5, (val_w >> 16) & 0xFF);
+	sio_write(0xF6, (val_w >> 8) & 0xFF);
+	sio_write(0xF7, val_w & 0xFF);
+
+	/* Write 0xCF to trigger SIO iLPC2AHB write command */
+	sio_write(0xFE, 0xCF);
+}
+
+
+void sio_ilpc2ahb_setup(int len)
 {
 	unsigned int b;
 
@@ -246,6 +281,9 @@ void sio_ilpc2ahb_setup(void)
 	/* Set Length to 1 Byte */
 	b = sio_read(0xF8);
 	b &= ~(0x03);
+#if 1 /* DEBUG */
+	b |= len; /* set length to 4 byte */
+#endif
 	sio_write(0xF8, b);
 }
 /* For AST1300 end */

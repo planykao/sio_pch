@@ -13,6 +13,7 @@ LP_RELEASE_DIR = $(RELEASEDIR)/loopback
 GPIO_RELEASE_DIR = $(RELEASEDIR)/gpio
 BP_RELEASE_DIR = $(RELEASEDIR)/bypass
 HWMON_RELEASE_DIR = $(RELEASEDIR)/hwmon
+WDT_RELEASE_DIR = $(RELEASEDIR)/wdt
 
 # files
 GPIO = gpio
@@ -45,7 +46,7 @@ endif
 CFLAGS += -I$(INCLUDE)
 
 # targets
-all: gpio loopback hwmon bypass changelog release
+all: gpio loopback hwmon bypass wdt changelog release
 
 gpio: $(GPIO_OBJS) $(GPIO).c
 	$(CC) $(CFLAGS) $(GPIO_OBJS) $(GPIO).c -o $(GPIO)
@@ -82,7 +83,7 @@ release:
 	cp -rf $(LP_CONF_DIR)/* $(GPIO_RELEASE_DIR); fi
 	if [ -f $(BYPASS) ]; then cp -rf $(BYPASS) $(BP_RELEASE_DIR); fi
 	if [ -f $(HWMON) ]; then cp -rf $(HWMON) $(HWMON_RELEASE_DIR); fi
-	if [ -f $(WDT) ]; then cp -rf $(WDT) $(BP_RELEASE_DIR); fi
+	if [ -f $(WDT) ]; then cp -rf $(WDT) $(WDT_RELEASE_DIR); fi
 
 .PHONY: changelog
 changelog:

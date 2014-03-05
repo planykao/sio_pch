@@ -729,10 +729,10 @@ void f71889ad_gpio_dir_out(int gpio, int value)
 void usage(void)
 {
 	printf("Usage : Command [FileName] [Pair] [PWRON] [PWROFF] [WDT]\n"
-			" Pair : 0 and 1 for Slot1\n"
-			"        2 and 3 for Slot2\n"
-			"        4 and 5 for Slot3\n"
-			"        6 and 7 for Slot4\n"
+			" Pair : 1 and 2 for Slot1\n"
+			"        3 and 4 for Slot2\n"
+			"        5 and 6 for Slot3\n"
+			"        7 and 8 for Slot4\n"
 			" PWRON Status : 0(Passthru), 1(Bypass)\n"
 			" PWROFF Status : 0(Passthru), 1(Bypass)\n"
 			" WDT trigger : 0(reset), 1(bypass)\n");

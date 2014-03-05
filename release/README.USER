@@ -1,0 +1,58 @@
+Just execute the program or add "-h" argument to show the usage for the program.
+
+Bypass
+================================================================================
+Usage : Command [FileName] [Pair] [PWRON] [PWROFF] [WDT]
+ Pair : 1 and 2 for Slot1
+        3 and 4 for Slot2
+        5 and 6 for Slot3
+        7 and 8 for Slot4
+ PWRON Status : 0(Passthru), 1(Bypass)
+ PWROFF Status : 0(Passthru), 1(Bypass)
+ WDT trigger : 0(reset), 1(bypass)
+
+i.e, Bypass testing on S0361:
+    # ./bypass S0361.conf 1 1 0 0
+
+
+GPIO Loopback
+================================================================================
+Usage: COMMAND FILE_NAME
+
+i.e, GPIO loopback testing on S0361:
+    # ./loopback S0361.conf
+
+
+GPIO output test (measure the voltage)
+================================================================================
+Usage: ./gpio [-c config -g GPIOs -o num]
+Usage: ./gpio [-h]
+
+  -c, <config_file>  configuration file for target board
+  -g, #              GPIO number
+  -o, #              output level, 1 is HIGH, 0 is LOW
+  -h,                print this message and quit
+
+i.e, gpio output testing on S0361:
+    # ./gpio -c S0361.conf -g 70 72 73 74 75 76 -o 1
+
+
+Hardware Monitor
+================================================================================
+Usage : hwmon <FILE NAME> <TIMES>
+
+i.e, Hardware monitor testing on S0361
+    # ./hwmon S0361.conf 1
+
+
+Watchdog Timer test
+================================================================================
+Usage : ./wdt [-c config -t time]
+Usage : ./wdt [-h]
+
+  -c, <config_file>  configuration file for target board
+  -t, #              time(seconds) of watcdog timer
+
+i.e, Watchdog Timer testing on S0361:
+    # ./wdt -c S0361.conf -t 1
+

@@ -5,6 +5,7 @@ conf -- put all configuration files here.
       |-- bypass
       |-- hwmon
       |-- loopback
+	  |-- wdt
 
 loopback.c - gpio loopback test program.
 gpio.c     - for SIT only, set the GPIOs to output and pull high or low.
@@ -20,6 +21,7 @@ script -- script directory
         |-- bypass
         |-- hwmon
         |-- gpio
+		|-- wdt
 
 libsio.c   - library for SIO.
 libsio.h   - header file for SIO library.
@@ -84,4 +86,7 @@ KNOWN ISSUE
    Vin = Vi * (R2 / (R1 + R2))
    
    For S0651, we just 8 times the value when read data from F71868A.
+
+4. On AST1300/AST2300, the source clock of Watchdog Timer can't configure as
+   PCLK, it can configure as 1MHz only.
 

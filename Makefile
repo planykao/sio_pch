@@ -76,6 +76,7 @@ release:
 	@mkdir -p $(GPIO_RELEASE_DIR)
 	@mkdir -p $(BP_RELEASE_DIR)
 	@mkdir -p $(HWMON_RELEASE_DIR)
+	cp -rf README.USER $(RELEASEDIR)
 	cp -rf $(CONFDIR)/* $(RELEASEDIR)
 	cp -rf $(SCRIPTDIR)/* $(RELEASEDIR)
 	if [ -f $(LOOPBACK) ]; then cp -rf $(LOOPBACK) $(LP_RELEASE_DIR); fi

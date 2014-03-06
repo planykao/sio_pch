@@ -19,6 +19,7 @@
 #define AST_SCU_BASE_HIGH_ADDR        0x1E6E
 #define AST_SCU_BASE_LOW_ADDR         0x2000
 #define AST_SCU_MULTI_FNC_PIN_ADDR    AST_SCU_BASE_LOW_ADDR + 0x84
+#define AST_SCU_UNLOCK                0x1688A8A8
 #define AST_WDT_BASE_HIGH_ADDR        0x1E78
 #define AST_WDT_BASE_LOW_ADDR         0x5000
 #define AST_WDT1_STATUS_ADDR          AST_WDT_BASE_LOW_ADDR + 0x00
@@ -104,7 +105,7 @@ int main(int argc, char *argv[])
 	else if (strncmp(chip, "AST", 3) == 0)
 		ast_wdt_setup(time);
 	else
-		ERR("this program doesn't support <%s> yet.\n");
+		ERR("this program doesn't support <%s> yet.\n", chip);
 
 	sio_exit();
 
@@ -173,7 +174,6 @@ void fin_wdt_setup(int time)
 void ast_wdt_setup(int time)
 {
 	unsigned int data, reload = CLOCK * time;
-	int addr_low;
 
 	/*
 	 * Disable WDT and select 1MHz as source clock
@@ -204,27 +204,22 @@ void ast_wdt_setup(int time)
 	 */
 	sio_ilpc2ahb_writel(0x4755, AST_WDT1_RESTART_ADDR, AST_WDT_BASE_HIGH_ADDR);
 
-//	sio_ilpc2ahb_write(0xFF, AST_WDT1_RST_WIDTH_ADDR, AST_WDT_BASE_HIGH_ADDR);
-//	data = sio_ilpc2ahb_read(AST_WDT1_CLR_TOUT_STATUS_ADDR, AST_WDT_BASE_HIGH_ADDR);
-//	data |= 0x1;
-//	sio_ilpc2ahb_write(data, AST_WDT1_CLR_TOUT_STATUS_ADDR, AST_WDT_BASE_HIGH_ADDR);
-
 	/*
 	 * Unclock SCU register 
 	 * Write 0x1688A8A8 to unlock this register.
 	 * Write other value to lock this register.
 	 */
-	sio_ilpc2ahb_writel(0x1688A8A8, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
+	sio_ilpc2ahb_writel(AST_SCU_UNLOCK, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
+
 
 	/* Enable WDT output function pin in SCU[84] D[4]/D[5] */
 	data = sio_ilpc2ahb_read(AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR);
-	data &= ~(0xFF);
- 	data |= 0x10;
- 	sio_ilpc2ahb_write(data, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
-//	data = sio_ilpc2ahb_read(AST_SCU_MULTI_FNC_PIN_ADDR + 1, AST_SCU_BASE_HIGH_ADDR);
-//	printf("aaaa = %x\n", data);
-// 	data |= 0xF0;
-// 	sio_ilpc2ahb_write(data, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
+ 	data |= (0x1 << 4);
+ 	sio_ilpc2ahb_write(data, AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR);
+	data = sio_ilpc2ahb_read(AST_SCU_MULTI_FNC_PIN_ADDR + 1, AST_SCU_BASE_HIGH_ADDR);
+	data |= 0xF0;
+ 	sio_ilpc2ahb_write(data, AST_SCU_MULTI_FNC_PIN_ADDR + 1, AST_SCU_BASE_HIGH_ADDR);
+
 
 	/* Enable Watchdog timer */
  	data = sio_ilpc2ahb_read(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);

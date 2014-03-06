@@ -69,8 +69,7 @@ static int total_cfg_pin_num = 3;
 
 int main(int argc, char *argv[])
 {
-	unsigned char b;
-	int pair, on, off, wdt, cfg;
+	int pair, on, off, wdt;
 	char chip[10];
 	struct cpld_cfg *cpld;
 	struct ast_cpld_cfg *ast_cpld;
@@ -183,7 +182,6 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
 {
 	FILE *fp;
 	int i;
-	char number[3][3];
 
 	fp = fopen(filename, "r");
 
@@ -222,7 +220,8 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
 			printf("%s ", ast_cpld->cfg_g[i]);
 		printf("\n");
 		for (i = 0; i < total_pair_pin_num / 3; i++)
-			printf("%s ", cpld->sendbit);
+			printf("%s ", ast_cpld->sendbit);
+		printf("\n");
 		printf("=====================================\n");
 #endif
 	} else {
@@ -433,7 +432,6 @@ void ast_cpld_trigger(unsigned long int data_offset, int offset)
 int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
                      struct gpio_groups *gg)
 {
-	unsigned char data;
 	int i, ret, offset;
 
 	/* pair */
@@ -446,7 +444,7 @@ int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
 		}
 
 		offset = atoi(cpld->pair_g[i] + 1);
-		ast_pair_setup((pair - 1 >> i) & 0x1, gg[ret].data_offset, offset);
+		ast_pair_setup(((pair - 1) >> i) & 0x1, gg[ret].data_offset, offset);
 	}
 
 	/* cfg */

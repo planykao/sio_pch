@@ -53,8 +53,10 @@ void sio_write_reg(int index, int address)
 	outb_p(index, address);
 }
 
-/* ldsel_reg: Logical Device Select 
- * ldnum:     Logical Device Number */
+/* 
+ * ldsel_reg: Logical Device Select 
+ * ldnum:     Logical Device Number
+ */
 void sio_select(int ldnum)
 {
 	DBG("SIO_LDSEL_REG = %x, ldnum = %x\n", SIO_LDSEL_REG, ldnum);
@@ -177,6 +179,8 @@ unsigned int sio_ilpc2ahb_read(int lr, int hr)
 	unsigned int b;
 	unsigned int mod;
 
+	sio_ilpc2ahb_setup(0); /* Setup iLPC2AHB and set data length to 1 bytes */
+	
 	mod = lr % 4; /* Address must be multiple of 4 */
 	lr = lr - mod;
 
@@ -238,8 +242,6 @@ void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 
 void sio_ilpc2ahb_writel(unsigned int val_w, unsigned int lw, unsigned int hw)
 {
-	unsigned int value, addr;
-
 	sio_ilpc2ahb_setup(2); /* Setup iLPC2AHB and set data length to 4 bytes */
 	/* 
 	 * Setup address
@@ -269,7 +271,12 @@ void sio_ilpc2ahb_writel(unsigned int val_w, unsigned int lw, unsigned int hw)
 	sio_write(0xFE, 0xCF);
 }
 
-
+/*
+ * sio_ilpc2ahb_setup(), setup the ilpc2ahb.
+ * len = 0, 1 byte.
+ * len = 1, 2 bytes.
+ * len = 2, 4 bytes.
+ */
 void sio_ilpc2ahb_setup(int len)
 {
 	unsigned int b;
@@ -278,12 +285,10 @@ void sio_ilpc2ahb_setup(int len)
 	sio_select(SIO_LPC2AHB_LDN);
 	/* enable iLPC2AHB */
 	sio_logical_device_enable(SIO_LPC2AHB_EN);
-	/* Set Length to 1 Byte */
+	/* Set Length */
 	b = sio_read(0xF8);
 	b &= ~(0x03);
-#if 1 /* DEBUG */
-	b |= len; /* set length to 4 byte */
-#endif
+	b |= len;
 	sio_write(0xF8, b);
 }
 /* For AST1300 end */

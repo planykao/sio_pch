@@ -84,7 +84,7 @@ void pin_list(char *chip_model, struct sensor *sensors);
 
 char chip_model[10];
 
-int main(int argc, unsigned char *argv[])
+int main(int argc, char *argv[])
 {
 	FILE *fp;
 	char *buf;
@@ -527,7 +527,6 @@ float read_ast_temperature_peci(unsigned int index, ...)
 float read_ast_temperature_i2c(unsigned int index, ...)
 {
 	unsigned int data_l = 0;
-	unsigned int data_h = 0;
 	unsigned int data = 0;
 	int low_addr;
 	int high_addr;

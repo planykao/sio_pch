@@ -48,7 +48,7 @@ static int gpio_set_then_read(int gpio_out, int gpio_in, int value)
 
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *chip)
 {
-	int new_gpio, index;
+	int index;
 
 	/* Enable GPIO7 group */
 	sio_gpio_enable(NCT_GPIO7_EN_LDN, GPIO7);

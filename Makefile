@@ -43,7 +43,7 @@ else
 	CFLAGS += -DNDEBUG
 endif
 
-CFLAGS += -I$(INCLUDE)
+CFLAGS += -I$(INCLUDE) -D_GNU_SOURCE
 
 # targets
 all: gpio loopback hwmon bypass wdt changelog release

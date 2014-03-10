@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/io.h>
-#include <sitest.h>
 
 #define PCI_CONFIG_ADDR_REG		0xCF8
 #define PCI_CONFIG_DATA_REG		0xCFC

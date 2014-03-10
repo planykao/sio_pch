@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 	if (iopl(3)) {
 		perror(NULL);
 		exit(1);
-	}	
+	}
 
 	/* parsing arguments */
 	while ((args = getopt(argc, argv, "c:t:h")) != -1) {

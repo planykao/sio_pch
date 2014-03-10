@@ -21,9 +21,11 @@ LOOPBACK = loopback
 HWMON = hwmon
 BYPASS = bypass
 WDT = wdt
+SCAN_SIO = scan_sio
+SCAN_PCI = scan_pci
 LIBPCH = libpch.c
 LIBSIO = libsio.c
-BIN = $(GPIO) $(HWMON) $(BYPASS) $(WDT) $(LOOPBACK)
+BIN = $(GPIO) $(HWMON) $(BYPASS) $(WDT) $(LOOPBACK) $(SCAN_SIO) $(SCAN_PCI)
 CHANGELOG = Changelog
 
 # objects
@@ -32,6 +34,7 @@ LOOPBACK_OBJS = libpch.o libsio.o
 HWMON_OBJS = libsio.o
 BP_OBJS = libpch.o libsio.o
 WDT_OBJS = libsio.o
+SCAN_SIO_OBJS = libsio.o
 
 GIT = $(shell which git > /dev/null 2>&1; echo $$?)
 
@@ -62,6 +65,12 @@ bypass: $(BP_OBJS) $(BYPASS).c
 
 wdt: $(WDT_OBJS) $(WDT).c
 	$(CC) $(CFLAGS) $(WDT_OBJS) $(WDT).c -o $(WDT)
+
+scan_sio: $(SCAN_SIO_OBJS) $(SCAN_SIO).c
+	$(CC) $(CFLAGS) $(SCAN_SIO_OBJS) $(SCAN_SIO).c -o $(SCAN_SIO)
+
+scan_pci: $(SCAN_PCI).c
+	$(CC) $(CFLAGS) -I/usr/src/kernels/2.6.32-358.el6.x86_64/include/ $(SCAN_PCI).c -o $(SCAN_PCI)
 
 libpch.o: $(LIBPCH)
 	$(CC) $(CFLAGS) -c $(LIBPCH)

@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <sys/io.h>
 
-#define PCI_CONFIG_ADDR_REG		0xCF8
-#define PCI_CONFIG_DATA_REG		0xCFC
+#define PCI_CONFIG_ADDR		0xCF8
+#define PCI_CONFIG_DATA		0xCFC
 
 #define PCI_DEVFN(dev,func)	((((dev) & 0x1f) << 3) | ((func) & 0x07))
 
@@ -14,8 +14,8 @@ long int readl(long int addr);
 
 long int readl(long int addr)
 {
-	outl(addr, PCI_CONFIG_ADDR_REG);
-	return inl(PCI_CONFIG_DATA_REG);
+	outl(addr, PCI_CONFIG_ADDR);
+	return inl(PCI_CONFIG_DATA);
 }
 
 int main(void)

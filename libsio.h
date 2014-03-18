@@ -58,8 +58,9 @@
 #define FIN_WDT_CONF_REG2      0xF6
 #define FIN_WDOUT_EN           (0x1 << 7)
 #define FIN_WD_RST_EN          (0x1 << 0)
-#define FIN_WD_EN              (0x1 << 5)
 #define FIN_WD_UNIT_OFFSET     3
+#define FIN_WD_PULSE_OFFSET    4
+#define FIN_WD_EN_OFFSET       5
 #define FIN_WDTMOUT_STS_OFFSET 6
 
 /* For Aspeed */

@@ -2,7 +2,7 @@
 CC = gcc
 
 # include directory
-INCLUDE = ${PWD}/
+INCLUDE = ${PWD}/include
 
 # directory
 CONFDIR = ${PWD}/conf
@@ -14,29 +14,14 @@ GPIO_RELEASE_DIR = $(RELEASEDIR)/gpio
 BP_RELEASE_DIR = $(RELEASEDIR)/bypass
 HWMON_RELEASE_DIR = $(RELEASEDIR)/hwmon
 WDT_RELEASE_DIR = $(RELEASEDIR)/wdt
+TOOLS_DIR	:= tools
 
-# files
-GPIO = gpio
-LOOPBACK = loopback
-HWMON = hwmon
-BYPASS = bypass
-WDT = wdt
-SCAN_SIO = scan_sio
-SCAN_PCI = scan_pci
-LIBPCH = libpch.c
-LIBSIO = libsio.c
-BIN = $(GPIO) $(HWMON) $(BYPASS) $(WDT) $(LOOPBACK) $(SCAN_SIO) $(SCAN_PCI)
-CHANGELOG = Changelog
-
-# objects
-GPIO_OBJS = libpch.o libsio.o
-LOOPBACK_OBJS = libpch.o libsio.o
-HWMON_OBJS = libsio.o
-BP_OBJS = libpch.o libsio.o
-WDT_OBJS = libsio.o
-SCAN_SIO_OBJS = libsio.o
-
-GIT = $(shell which git > /dev/null 2>&1; echo $$?)
+# all tools
+TOOLS_GPIO = $(TOOLS_DIR)/gpio
+TOOLS_LP = $(TOOLS_DIR)/loopback
+TOOLS_HWMON = $(TOOLS_DIR)/hwmon
+TOOLS_WDT = $(TOOLS_DIR)/wdt
+TOOLS_BP = $(TOOLS_DIR)/bypass
 
 # CFLAGS
 DEBUG ?= 0
@@ -48,37 +33,13 @@ endif
 
 CFLAGS += -I$(INCLUDE) -D_GNU_SOURCE
 
-# targets
-all: gpio loopback hwmon bypass wdt changelog release
+GIT = $(shell which git > /dev/null 2>&1; echo $$?)
 
-gpio: $(GPIO_OBJS) $(GPIO).c
-	$(CC) $(CFLAGS) $(GPIO_OBJS) $(GPIO).c -o $(GPIO)
+.PHONY: all clean
 
-loopback: $(GPIO_OBJS) $(LOOPBACK).c
-	$(CC) $(CFLAGS) $(LOOPBACK_OBJS) $(LOOPBACK).c -o $(LOOPBACK)
+all:
 
-hwmon: $(HWMON_OBJS) $(HWMON).c
-	$(CC) $(CFLAGS) $(HWMON_OBJS) $(HWMON).c -o $(HWMON)
-
-bypass: $(BP_OBJS) $(BYPASS).c
-	$(CC) $(CFLAGS) $(BP_OBJS) $(BYPASS).c -o $(BYPASS)
-
-wdt: $(WDT_OBJS) $(WDT).c
-	$(CC) $(CFLAGS) $(WDT_OBJS) $(WDT).c -o $(WDT)
-
-scan_sio: $(SCAN_SIO_OBJS) $(SCAN_SIO).c
-	$(CC) $(CFLAGS) $(SCAN_SIO_OBJS) $(SCAN_SIO).c -o $(SCAN_SIO)
-
-scan_pci: $(SCAN_PCI).c
-	$(CC) $(CFLAGS) -I/usr/src/kernels/2.6.32-358.el6.x86_64/include/ $(SCAN_PCI).c -o $(SCAN_PCI)
-
-libpch.o: $(LIBPCH)
-	$(CC) $(CFLAGS) -c $(LIBPCH)
-
-libsio.o: $(LIBSIO)
-	$(CC) $(CFLAGS) -c $(LIBSIO)
-
-.PHONY: release	
+.PHONY: release
 release:
 	@mkdir -p $(RELEASEDIR)
 	@mkdir -p $(LP_RELEASE_DIR)
@@ -88,12 +49,12 @@ release:
 	cp -rf README.USER $(RELEASEDIR)
 	cp -rf $(CONFDIR)/* $(RELEASEDIR)
 	cp -rf $(SCRIPTDIR)/* $(RELEASEDIR)
-	if [ -f $(LOOPBACK) ]; then cp -rf $(LOOPBACK) $(LP_RELEASE_DIR); fi
-	if [ -f $(GPIO) ]; then cp -rf $(GPIO) $(GPIO_RELEASE_DIR); \
+	if [ -f $(TOOLS_LP) ]; then mv $(TOOLS_LP) $(LP_RELEASE_DIR); fi
+	if [ -f $(TOOLS_GPIO) ]; then mv $(TOOLS_GPIO) $(GPIO_RELEASE_DIR); \
 	cp -rf $(LP_CONF_DIR)/* $(GPIO_RELEASE_DIR); fi
-	if [ -f $(BYPASS) ]; then cp -rf $(BYPASS) $(BP_RELEASE_DIR); fi
-	if [ -f $(HWMON) ]; then cp -rf $(HWMON) $(HWMON_RELEASE_DIR); fi
-	if [ -f $(WDT) ]; then cp -rf $(WDT) $(WDT_RELEASE_DIR); fi
+	if [ -f $(TOOLS_BP) ]; then mv $(TOOLS_BP) $(BP_RELEASE_DIR); fi
+	if [ -f $(TOOLS_HWMON) ]; then mv $(TOOLS_HWMON) $(HWMON_RELEASE_DIR); fi
+	if [ -f $(TOOLS_WDT) ]; then mv $(TOOLS_WDT) $(WDT_RELEASE_DIR); fi
 
 .PHONY: changelog
 changelog:
@@ -103,6 +64,6 @@ else
 	git log > $(CHANGELOG)
 endif
 
-.PHONY: clean
-clean:
-	rm -rf *.o $(BIN) $(RELEASEDIR)/* $(CHANGELOG)
+# import tools/Module.mk
+include tools/Module.mk
+

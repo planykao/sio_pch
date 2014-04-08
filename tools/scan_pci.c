@@ -33,6 +33,9 @@ int main(void)
 		printf("%02X: data = %x\n", i, data);
 	}
 
+	data = readl(PCI_CONF1_ADDRESS(0, PCI_DEVFN(0x1F, 0x0), 0xDC));
+	printf("0xDC: data = %x\n", data);
+
 	return 0;
 }
 

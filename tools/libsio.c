@@ -211,6 +211,46 @@ unsigned int sio_ilpc2ahb_read(int lr, int hr)
 	return b;
 }
 
+unsigned int sio_ilpc2ahb_readl(int lr, int hr)
+{
+	unsigned int b;
+	unsigned int mod;
+
+	sio_ilpc2ahb_setup(2); /* Setup iLPC2AHB and set data length to 1 bytes */
+	
+	mod = lr % 4; /* Address must be multiple of 4 */
+	lr = lr - mod;
+
+	/* 
+	 * Setup address
+	 * 0xF0: SIO iLPC2AHB address bit[31:24]
+	 * 0xF1: SIO iLPC2AHB address bit[23:16]
+	 * 0xF2: SIO iLPC2AHB address bit[15:8]   
+	 * 0xF3: SIO iLPC2AHB address bit[7:0]
+	 */
+	sio_write(0xF0, hr >> 8);
+	sio_write(0xF1, hr & 0xFF);
+	sio_write(0xF2, lr >> 8);
+	sio_write(0xF3, lr & 0xFF);
+
+	/* Read to trigger SIO iLPC2AHB write command */
+	sio_read(0xFE);
+
+	/*
+	 * Read data
+	 * 0xF4: SIO iLPC2AHB data bit[31:24]
+	 * 0xF5: SIO iLPC2AHB data bit[23:16]
+	 * 0xF6: SIO iLPC2AHB data bit[15:8]
+	 * 0xF7: SIO iLPC2AHB data bit[7:0]
+	 */
+	b = sio_read(0xF7); /* Get the value */
+	b |= sio_read(0xF6) << 8; /* Get the value */
+	b |= sio_read(0xF5) << 16; /* Get the value */
+	b |= sio_read(0xF4) << 24; /* Get the value */
+
+	return b;
+}
+
 void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw)
 {
 	

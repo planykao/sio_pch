@@ -110,6 +110,7 @@ void sio_ilpc2ahb_setup(int len);
 void sio_ilpc2ahb_write(unsigned char val_w, unsigned int lw, unsigned int hw);
 void sio_ilpc2ahb_writel(unsigned int val_w, unsigned int lw, unsigned int hw);
 unsigned int sio_ilpc2ahb_read(int lr, int hr);
+unsigned int sio_ilpc2ahb_readl(int lr, int hr);
 
 int f71889ad_get_gpio_dir_index(int gpio);
 int nct_get_gpio_dir_index(int gpio);

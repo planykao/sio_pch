@@ -21,15 +21,14 @@
 #include <libsio.h>
 
 void usage(int);
-int read_config(char *, char *, unsigned int *);
 static void gpio_config(int, int, unsigned int);
-static void sio_gpio_config(int, int, char *);
+static void sio_gpio_config(int, int, int, char *);
 
 int total;
 
 int main(int argc, char *argv[])
 {
-	char args, *filename, chip[10];
+	char args, chip[10];
 	int i = 0, gpio[10] = {-1}, level = -1;
 	unsigned int gpio_base_addr = 0xFFFF;
 
@@ -39,10 +38,19 @@ int main(int argc, char *argv[])
 	}
 
 	/* parsing arguments */
-	while ((args = getopt(argc, argv, "a:g:ho:")) != -1) {
+	while ((args = getopt(argc, argv, "a:c:d:g:ho:")) != -1) {
 		switch (args) {
 			case 'a':
 				gpio_base_addr = (unsigned int)strtol(optarg, NULL, 16);
+				break;
+			case 'c':
+				if (strncmp("NCT", optarg, 3) != 0 &&
+					strncmp("FIN", optarg, 3) != 0) {
+					printf("Unsupported chip: %s\n", optarg);
+				} else {
+					strcpy(chip, optarg);
+					printf("%s\n", chip);
+				}
 				break;
 			case 'g':
 				optind--;
@@ -70,7 +78,9 @@ int main(int argc, char *argv[])
 		for (i = 0; i < total; i++) {
 			EFER = gpio_base_addr;
 			EFDR = EFER + 1;
+			sio_enter(chip);
 			sio_gpio_config(gpio[i], level, chip);
+			sio_exit();
 		}
 	}
 	/* test end */
@@ -81,9 +91,10 @@ int main(int argc, char *argv[])
 void usage(int i)
 {
 	if (i) {
-		printf("Usage: ./gpio [-c config -g GPIOs -o num]\n");
+		printf("Usage: ./gpio [-a addr -c chip -g GPIOs -o num]\n");
 		printf("Usage: ./gpio [-h]\n\n");
-		printf("  -c, <config_file>  configuration file for target board\n");
+		printf("  -a, #              GPIO base address for PCH or IO port for SuperIO\n");
+		printf("  -c, #              SuperIO chip\n");
 		printf("  -g, #              GPIO number\n");
 		printf("  -o, #              output level, 1 is HIGH, 0 is LOW\n");
 		printf("  -h,                print this message and quit\n\n");
@@ -93,29 +104,6 @@ void usage(int i)
 	}
 
 	exit(1);
-}
-
-int read_config(char *filename, char *chip, unsigned int *address)
-{
-	FILE *fp;
-	int i;
-
-	fp = fopen(filename, "r");
-	
-	if (fp == NULL) {
-		ERR("Fail to open <%s>, please enter the correct file name.\n", filename);
-		return -1;
-	}
-
-	/* skip header */
-	for (i = 0; i < 4; i++)
-		fscanf(fp, "%*[^\n]\n", NULL);
-
-	/* read chip and GPIO base address */
-	fscanf(fp, "%s %x\n", chip, address);
-	fclose(fp);
-
-	return 0;
 }
 
 /* Set gpio direction to output and pull HIGH or LOW  */
@@ -134,7 +122,7 @@ static void gpio_config(int gpio, int level, unsigned int gpio_base_addr)
 	printf("Set GPIO[%d] Level to %s\n", gpio, level ? "HIGH" : "LOW");
 }
 
-static void sio_gpio_config(int gpio, int level, char *chip)
+static void sio_gpio_config(int ldn, int gpio, int level, char *chip)
 {
 	int index;
 

@@ -13,6 +13,7 @@
 
 static int gpio_set_then_read(int gpio_out, int gpio_in, int value);
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *chip);
+static void help(void);
 
 unsigned long int base_addr;
 
@@ -46,10 +47,62 @@ static int gpio_set_then_read(int gpio_out, int gpio_in, int value)
 	}
 }
 
-static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *chip)
+static int sio_gpio_set_then_read(int gpio_out, int gpio_in, \
+                                  int value, char *chip)
 {
-	int index;
+	int index, ldn, offset;
 
+#if 1
+	/* setup multi-function pin for NCT5533D, this should be done by BIOS. */
+	if (strncmp(chip, "NCT5", 4) == 0) {
+		nct5xxx_multi_func_pin(gpio_out);
+		nct5xxx_multi_func_pin(gpio_in);
+	}
+
+	/* TODO: get gpio enable logical number from different sio */
+	ldn = sio_gpio_get_en_ldn(chip, gpio_out);
+	offset = sio_gpio_get_en_offset(chip, gpio_out);
+	DBG("gpio_out = %d, enldn = %d, offset = %d\n", gpio_out, ldn, offset);
+	if (ldn == -1 || offset == -1) {
+		ERR("ldn = %d, offset = %d, %s not support or GPIO%d incorrect!\n", \
+				ldn, offset, chip, gpio_in);
+		exit(1);
+	}
+
+	sio_gpio_enable(ldn, offset);
+	ldn = sio_gpio_get_ldn(chip, gpio_out);
+	sio_select(ldn);
+	index = sio_get_gpio_dir_index(chip, gpio_out);
+	DBG("ldn = %d, index = %x\n", ldn, index);
+	if (index == -1) {
+		ERR("GPIO%d incorrect!\n", gpio_out);
+		exit(1);
+	}
+
+	sio_gpio_dir_out(gpio_out, value, index, NCT_GPIO_OUT);
+
+
+	ldn = sio_gpio_get_en_ldn(chip, gpio_in);
+	offset = sio_gpio_get_en_offset(chip, gpio_in);
+	DBG("gpio_in = %d, enldn = %d, offset = %d\n", gpio_in, ldn, offset);
+	if (ldn == -1 || offset == -1) {
+		ERR("ldn = %d, offset = %d, %s not support or GPIO%d incorrect!\n", \
+				ldn, offset, chip, gpio_in);
+		exit(1);
+	}
+
+	sio_gpio_enable(ldn, offset);
+	ldn = sio_gpio_get_ldn(chip, gpio_in);
+	sio_select(ldn);
+	index = sio_get_gpio_dir_index(chip, gpio_in);
+	DBG("ldn = %d, index = %x\n", ldn, index);
+	if (index == -1) {
+		ERR("GPIO%d incorrect!\n", gpio_in);
+		exit(1);
+	}
+
+	sio_gpio_dir_in(gpio_in, index, NCT_GPIO_IN);
+#else
 	/* Enable GPIO7 group */
 	sio_gpio_enable(NCT_GPIO7_EN_LDN, GPIO7);
 	/* Select GPIO7 */
@@ -58,8 +111,9 @@ static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *ch
 	index = sio_get_gpio_dir_index(chip, gpio_out);
 	sio_gpio_dir_out(gpio_out, value, index, NCT_GPIO_OUT);
 	
-	index = sio_get_gpio_dir_index(chip, gpio_out);
+	index = sio_get_gpio_dir_index(chip, gpio_in);
 	sio_gpio_dir_in(gpio_in, index, NCT_GPIO_IN);
+#endif
 
 	printf("GPIO[%d] output %d to GPIO[%d] test ", gpio_out, value, gpio_in);
 	if (sio_gpio_get(gpio_in, index) == value) {
@@ -71,11 +125,20 @@ static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *ch
 	}
 }
 
+static void help(void)
+{
+	printf("Usage: ./loopback [-c config]\n");
+	printf("Usage: ./loopback [-h]\n\n");
+	printf("  -c, <config_file>  configuration file for target board\n");
+	printf("  -h,                print this message and quit\n\n");
+	exit(1);
+}
+
 int main(int argc, char *argv[])
 {
 	int i, total, pin1, pin2;
 	FILE *fp;
-	char chip[10];
+	char chip[10], args, *filename;
 
 	/* 
 	 * Change I/O privilege level to all access. For Linux only. 
@@ -86,12 +149,23 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	if (argc != 2) {
-		printf("Usage: COMMAND FILE_NAME\n");
-		exit(-1);
+	while ((args = getopt(argc, argv, "c:h")) != -1) {
+		switch (args) {
+			case 'c':
+				filename = optarg;
+				break;
+			case ':':
+			case 'h':
+			case '?':
+				help();
+				break;
+		}
 	}
 
-	if ((fp = fopen(argv[1], "r")) == NULL) {
+	if (argc != 3)
+		help();
+
+	if ((fp = fopen(filename, "r")) == NULL) {
 		ERR("Fail to open <%s>, please enter the correct file name.\n", argv[1]);
 		printf("Usage: COMMAND FILE_NAME\n");
 		exit(-1);
@@ -133,7 +207,9 @@ int main(int argc, char *argv[])
 			if (gpio_set_then_read(pin2, pin1, GPIO_HIGH) == -1)
 				exit(1);
 		} else { /* test gpio via SIO */
-			sio_enter(argv[1]);
+//			sio_enter(argv[1]);
+			sio_enter(chip);
+#ifndef DEBUG
 			if (sio_gpio_set_then_read(pin1, pin2, GPIO_LOW, chip) == -1)
 				exit(1);
 			if (sio_gpio_set_then_read(pin1, pin2, GPIO_HIGH, chip) == -1)
@@ -142,6 +218,16 @@ int main(int argc, char *argv[])
 				exit(1);
 			if (sio_gpio_set_then_read(pin2, pin1, GPIO_HIGH, chip) == -1)
 				exit(1);
+#else
+			sio_gpio_set_then_read(pin1, pin2, GPIO_LOW, chip);
+			printf("\n");
+			sio_gpio_set_then_read(pin1, pin2, GPIO_HIGH, chip);
+			printf("\n");
+			sio_gpio_set_then_read(pin2, pin1, GPIO_LOW, chip);
+			printf("\n");
+			sio_gpio_set_then_read(pin2, pin1, GPIO_HIGH, chip); 
+			printf("\n");
+#endif
 			sio_exit();
 		}
 	}

@@ -1,9 +1,10 @@
 # objects
 OBJS = $(TOOLS_DIR)/libpch.o $(TOOLS_DIR)/libsio.o
 SCAN_SIO_OBJS = $(TOOLS_DIR)/libsio.o
+I2C_OBJS = $(TOOLS_DIR)/i2cbusses.o $(TOOLS_DIR)/util.o $(TOOLS_DIR)/scan_pci.o $(TOOLS_DIR)/libpch.o
 
 # Tools
-TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio scan_pci
+TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio scan_pci i2cget nct6683d
 
 all: $(addprefix $(TOOLS_DIR)/,$(TOOLS_TARGET))
 
@@ -28,11 +29,26 @@ $(TOOLS_DIR)/scan_sio: $(SCAN_SIO_OBJS) $(TOOLS_DIR)/scan_sio.c
 $(TOOLS_DIR)/scan_pci: $(TOOLS_DIR)/scan_pci.c
 	$(CC) $(CFLAGS) -I/usr/src/kernels/2.6.32-358.el6.x86_64/include/ -o $@ $^
 
+$(TOOLS_DIR)/i2cget: $(I2C_OBJS) $(TOOLS_DIR)/i2cget.c
+	$(CC) $(CFLAGS) -O2 -lcurses -o $@ $^
+
+$(TOOLS_DIR)/nct6683d: $(OBJS) $(TOOLS_DIR)/nct6683d.c
+	$(CC) $(CFLAGS) -o $@ $^
+
 # Objects
-$(TOOLS_DIR)/libpch.o: $(TOOLS_DIR)/libpch.c
+$(TOOLS_DIR)/libpch.o: $(TOOLS_DIR)/libpch.c $(INCLUDE)/libpch.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TOOLS_DIR)/libsio.o: $(TOOLS_DIR)/libsio.c
+$(TOOLS_DIR)/libsio.o: $(TOOLS_DIR)/libsio.c $(INCLUDE)/libsio.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TOOLS_DIR)/i2cbusses.o: $(TOOLS_DIR)/i2cbusses.c $(INCLUDE)/i2cbusses.h $(INCLUDE)/linux/i2c-dev.h
+	$(CC) $(CFLAGS) -O2 -c $< -o $@
+
+$(TOOLS_DIR)/util.o: $(TOOLS_DIR)/util.c $(INCLUDE)/util.h
+	$(CC) $(CFLAGS) -O2 -c $< -o $@
+
+$(TOOLS_DIR)/scan_pci.o: $(TOOLS_DIR)/scan_pci.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:

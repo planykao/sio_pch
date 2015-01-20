@@ -76,6 +76,9 @@ float read_ast_fan(unsigned int index, ...);
 float read_ast_voltage(unsigned int index, ...);
 float read_ast_voltage1(unsigned int index, ...);
 
+void get_vol_calibration(void);
+int calibration;
+
 void usage(void);
 
 int type_list(struct sensor *sensors);
@@ -219,6 +222,7 @@ int main(int argc, char *argv[])
 		 * Entended Function Mode.
 		 */
 		init_peci();
+		get_vol_calibration();
 	} else {
 		/* Read HW monitor base address */
 		hw_base_addr = read_hwmon_base_address();
@@ -405,6 +409,49 @@ unsigned int read_hwmon_base_address(void)
         high_addr, low_addr, addr);
 
 	return addr;
+}
+
+void get_vol_calibration(void)
+{
+	int ret;
+
+	if (!strcmp(chip_model, "AST1300")) {
+		/* TODO needs to modify */
+		sio_ilpc2ahb_write(0x2F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
+		usleep(500000);
+		sio_ilpc2ahb_writel(0x1000006F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
+		
+//		sio_ilpc2ahb_writel(0x6F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
+//		sio_ilpc2ahb_writel(0x00, LOW_ADC_BASE_ADDR + 0, HIGH_ADC_BASE_ADDR);
+//		sio_ilpc2ahb_writel(0x00, LOW_ADC_BASE_ADDR + 1, HIGH_ADC_BASE_ADDR);
+//		sio_ilpc2ahb_writel(0x10, LOW_ADC_BASE_ADDR + 2, HIGH_ADC_BASE_ADDR);
+
+		DBG("ADC00 = %x\n", sio_ilpc2ahb_readl(LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR));
+
+		sleep(2);
+
+		ret = (int)sio_ilpc2ahb_readl(LOW_ADC_BASE_ADDR + 0x28, HIGH_ADC_BASE_ADDR);
+		
+		
+		DBG("ADC28 = %x\n", ret);
+	
+		if ((ret >> 8) & 0x1)
+			calibration = 0x200 - (ret & 0x3FF);
+		else
+			calibration = 0x0 - (ret & 0x3FF);
+		
+		sio_ilpc2ahb_writel(0x1000006F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
+		DBG("ADC00 = %x\n", sio_ilpc2ahb_readl(LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR));
+	} else if (!strcmp(chip_model, "AST1400")) {
+		DBG("compensating = 0x%x\n", (int)sio_ilpc2ahb_readl(0x1650, 0x1E72));
+		DBG("compensating = %d\n", (int)sio_ilpc2ahb_readl(0x1650, 0x1E72));
+		calibration = 0x200 - (int)sio_ilpc2ahb_readl(0x1650, 0x1E72);
+	} else {
+		printf("Doesn't support this chip: %s\n", chip_model);
+		exit(-1);
+	}
+
+	DBG("calibration = %d\n", calibration);
 }
 
 void bank_select(unsigned int address, unsigned int bank)
@@ -612,8 +659,27 @@ float read_ast_voltage(unsigned int index, ...)
 	par1 = va_arg(args, double);
 	va_end(args);
 
-	/* Ask BIOS to get the ratio */
-	result = (((float) data) * ((float) par1) * 25 / 1023 / 100);
+	/* If the value is not correct, ask BIOS to get the formula. */
+	/* TODO: 
+	 *     For AST1300, the formula is:
+     *         V = RAW_DATA * par1 * 25 / 1023 / 100
+     *     For AST1400, the formula is:
+	 *         V = RAW_DATA * par1 * 25 / 1024 / 100
+	 *
+	 *     the actual formula is(copy from AST1300/AST1400 datasheet):
+	 *         V = RAW_DATA * (R1 + R2) / R2 * 2.5 / 1023
+	 *     or
+	 *         V = RAW_DATA * (R1 + R2) / R2 * 2.5 / 1024
+	 */
+	data += calibration;
+	if (strcmp(chip_model, "AST1300") == 0)
+		result = (((float) data) * ((float) par1) * 25 / 1023 / 100);
+	else if (strcmp(chip_model, "AST1400") == 0)
+		result = (((float) data) * ((float) par1) * 25 / 1024 / 100);
+	else { /* not support */
+		printf("This program doesn't support %s right now...\n", chip_model);
+		exit(-1);
+	}
 
 	return result;
 }
@@ -625,7 +691,7 @@ float read_ast_voltage1(unsigned int index, ...)
 	unsigned int data = 0;
 	int low_addr;
 	int high_addr;
-	float multiplier;
+	float multiplier, result;
 	va_list args;
 
 	low_addr = LOW_ADC_BASE_ADDR + index;
@@ -641,7 +707,13 @@ float read_ast_voltage1(unsigned int index, ...)
 	va_end(args);
 
 	/* Ask BIOS to get the ratio */
-	return (((float) data) * multiplier / 1024);
+	data += calibration;
+	if (!strcmp(chip_model, "AST1300"))
+		result =  (((float) data) * multiplier / 1023);
+	else
+		result =  (((float) data) * multiplier / 1024);
+
+	return result;
 }
 
 
@@ -907,9 +979,10 @@ void pin_list(char *chip_model, struct sensor *sensors)
 					break;
 			}
 		}
-	} else if (strcmp("AST1300", chip_model)  ==  0) {
+	} else if (strncmp("AST", chip_model, 3)  ==  0) {
 		if (strcmp(sensors->pin_name, "AA21") == 0) { /* PECI */
-			if (strcmp(sensors->name, "TEMP_CPU0") == 0)
+			if (strcmp(sensors->name, "TEMP_CPU0") == 0 ||
+				strcmp(sensors->name, "PECI_CPU") == 0)
 				sensors->index = 0x50;
 			else if (strcmp(sensors->name, "TEMP_CPU1") == 0)
 				sensors->index = 0x54;
@@ -922,9 +995,11 @@ void pin_list(char *chip_model, struct sensor *sensors)
 			sensors->type = 0;
 		} else if (strcmp(sensors->pin_name, "D1") == 0) { /* I2C */
 			sensors->type = 1;
-			if (strcmp(sensors->name, "TEMP_BMC") == 0)
+			if (strcmp(sensors->name, "TEMP_BMC") == 0 ||
+				strcmp(sensors->name, "TEMP_ENV0") == 0)
 				sensors->index = 0x90; /* device addres 0x90 */
-			else if (strcmp(sensors->name, "TEMP_ENV") == 0)
+			else if (strcmp(sensors->name, "TEMP_ENV") == 0 ||
+					 strcmp(sensors->name, "TEMP_ENV1") == 0)
 				sensors->index = 0x98; /* device addres 0x98 */
 			else {
 				ERR("Sensor name should be TEMP_BMC or TEMP_ENV\n");

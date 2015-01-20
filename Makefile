@@ -31,6 +31,13 @@ else
 	CFLAGS += -DNDEBUG
 endif
 
+SCAN_PCI ?= 0
+ifeq ($(SCAN_PCI), 1)
+	CFLAGS += -DSCAN_PCI
+else
+	CFLAGS += -DNSCAN_PCI
+endif
+
 CFLAGS += -I$(INCLUDE) -D_GNU_SOURCE
 
 GIT = $(shell which git > /dev/null 2>&1; echo $$?)
@@ -55,6 +62,10 @@ release:
 	if [ -f $(TOOLS_BP) ]; then mv $(TOOLS_BP) $(BP_RELEASE_DIR); fi
 	if [ -f $(TOOLS_HWMON) ]; then mv $(TOOLS_HWMON) $(HWMON_RELEASE_DIR); fi
 	if [ -f $(TOOLS_WDT) ]; then mv $(TOOLS_WDT) $(WDT_RELEASE_DIR); fi
+
+.PHONY: clean-release
+clean-release:
+	rm -rf $(RELEASEDIR)/*
 
 .PHONY: changelog
 changelog:

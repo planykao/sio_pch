@@ -13,7 +13,7 @@ echo "*     Please install Jumpers in JGPIO     *"
 echo "*******************************************"
 read -p "Press Enter Key to Continue if Jumpers is install... "
 
-./gpio-loopback $1
+./loopback -c $1
 
 if [ "$?" == "0" ]; then
 	echo -e "\033[0;30;42m ************************** \033[0m"

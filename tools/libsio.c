@@ -8,7 +8,7 @@
 /* Enter the Extended Function Mode */
 void sio_enter(char *chip)
 {
-	if (strncmp("AST1300", chip, 7) == 0) {
+	if (strncmp("AST", chip, 3) == 0) {
 		outb_p(0xA5, EFER);
 		outb_p(0xA5, EFER);
 		DBG("chip = %s, EFER = %x, EFDR = %x\n", chip, EFER, EFDR);
@@ -154,8 +154,8 @@ void sio_gpio_dir_in(int gpio, int index, int io)
  * NCT_GPIO_OUT    0
  * FIN_GPIO_OUT    1
  *
- * i.e., sio_gpio_dir_in(gpio, index, NCT_GPIO_OUT)
- *       sio_gpio_dir_in(gpio, index, FIN_GPIO_OUT)
+ * i.e., sio_gpio_dir_out(gpio, value, index, NCT_GPIO_OUT)
+ *       sio_gpio_dir_out(gpio, value, index, FIN_GPIO_OUT)
  */
 void sio_gpio_dir_out(int gpio, int value, int index, int io)
 {
@@ -355,10 +355,13 @@ int f71889ad_get_gpio_dir_index(int gpio)
 		return 0x90;
 	else if (gpio >= 70 && gpio <= 77)
 		return 0x80;
+	else
+		return -1;
 }
 
 /* 
- * nct_get_gpio_dir_index(), get gpio direction index for Nuvoton SuperIO.
+ * nct_get_gpio_dir_index(), get gpio direction index for Nuvoton NCT6776F 
+ * SuperIO. 
  * gpio data index = direction index + 1
  */
 int nct_get_gpio_dir_index(int gpio)
@@ -385,6 +388,115 @@ int nct_get_gpio_dir_index(int gpio)
 		return 0xE8;
 	else if (gpio == 100) /* GPIOA, Logical Device 8 */
 		return 0xE0;
+	else
+		return -1;
+}
+
+/* 
+ * nct5_get_gpio_dir_index(), get gpio direction index for Nuvoton NCT5XXX 
+ * SuperIO.
+ * gpio data index = direction index + 1
+ */
+int nct5xxx_get_gpio_dir_index(int gpio)
+{
+	if (gpio == 0 || gpio == 4) /* GPIO0, Logical Device 8 */
+		return 0xE0;
+	else if (gpio >= 20 && gpio <= 26) /* GPIO2, Logical Device 9 */
+		return 0xE0;
+	else if (gpio == 41 || gpio == 42) /* GPIO4, Logical Device 9 */
+		return 0xF0;
+	else if (gpio == 54 || gpio == 56 || gpio == 57) /* GPIO5, Logical Device 9 */
+		return 0xF4;
+	else if (gpio == 74 || gpio <= 75) /* GPIO7, Logical Device 7 */
+		return 0xE0;
+	else if (gpio >= 80 && gpio <= 87) /* GPIO8, Logical Device 7 */
+		return 0xE4;
+	else
+		return -1;
+}
+
+/*
+ * nct5xxx_multi_func_pin(), setup multi-function pin for Nuvoton NCT5XXXX,
+ * this should be done by BIOS, not application.
+ * Please refer to datasheet page 255 for more detail.
+ */
+void nct5xxx_multi_func_pin(int gpio)
+{
+	int b;
+
+	if (gpio == 0) {
+		b = sio_read(0x1C);
+		DBG("0x1C: %x\n", b);
+		b |= (0x1 << 0);
+		DBG("0x1C: %x\n", b);
+		sio_write(0x1C, b);
+
+		sio_select(0x08);
+		b = sio_read(0xE4);
+		b &= ~(0x1 << 0);
+		DBG("LDN: 0x08, offset: 0xE4, value: %x\n", b);
+		sio_write(0xE4, b);
+	} else if (gpio == 4) {
+		b = sio_read(0x1C);
+		DBG("0x1C: %x\n", b);
+		b |= (0x1 << 5);
+		DBG("0x1C: %x\n", b);
+		sio_write(0x1C, b);
+	} else if (gpio == 20 || gpio == 21) {
+		b = sio_read(0x2A);
+		DBG("0x2A: %x\n", b);
+		b |= 0x1;
+		DBG("0x2A: %x\n", b);
+		sio_write(0x2A, b);
+
+		sio_select(0x09);
+		b = sio_read(0xE9);
+		b &= ~(0x1 << (gpio % 10));
+		DBG("LDN: 0x08, offset: 0xE4, value: %x\n", b);
+		sio_write(0xE9, b);
+	} else if (gpio == 22 || gpio == 23) {
+		b = sio_read(0x2A);
+		DBG("0x2A: %x\n", b);
+		b |= 0x1 << 1;
+		DBG("0x2A: %x\n", b);
+		sio_write(0x2A, b);
+
+		sio_select(0x09);
+		b = sio_read(0xE9);
+		b &= ~(0x1 << (gpio % 10));
+		DBG("LDN: 0x08, offset: 0xE4, value: %x\n", b);
+		sio_write(0xE9, b);
+	} else if (gpio == 26) {
+		b = sio_read(0x2C);
+		DBG("0x2C: %x\n", b);
+		b &= ~(0x1 << 0);
+		DBG("0x2C: %x\n", b);
+		sio_write(0x2C, b);
+	} else if (gpio == 54 || gpio == 56 || gpio == 57){
+		sio_select(0x09);
+		b = sio_read(0xEB);
+		b &= ~(0x1 << (gpio % 10));
+		DBG("LDN: 0x09, offset: 0xEB, value: %x\n", b);
+		sio_write(0xEB, b);
+	} else if (gpio == 74 || gpio == 75) {
+		b = sio_read(0x2B);
+		DBG("0x2B: %x\n", b);
+		b |= (0x1 << (gpio % 10 + 1));
+		DBG("0x2B: %x\n", b);
+		sio_write(0x2B, b);
+
+		sio_select(0x07);
+		b = sio_read(0xEC);
+		b &= ~(0x1 << (gpio % 10));
+		DBG("LDN: 0x08, offset: 0xE4, value: %x\n", b);
+		sio_write(0xEC, b);
+	} else if (gpio >=80 && gpio <=87) {
+		sio_select(0x07);
+		b = sio_read(0xED);
+		b &= ~(0x1 << (gpio % 10));
+		DBG("LDN: 0x08, offset: 0xE4, value: %x\n", b);
+		sio_write(0xED, b);
+	}
 }
 
 /*
@@ -392,9 +504,114 @@ int nct_get_gpio_dir_index(int gpio)
  */
 int sio_get_gpio_dir_index(char *chip, int gpio)
 {
+	int ret = -1;
+
 	if (strncmp(chip, "F71889AD", 8) == 0)
-		return f71889ad_get_gpio_dir_index(gpio);
-	else if (strncmp(chip, "NCT", 3) == 0)
-		return nct_get_gpio_dir_index(gpio);
+		ret = f71889ad_get_gpio_dir_index(gpio);
+	else if (strncmp(chip, "NCT6", 4) == 0)
+		ret = nct_get_gpio_dir_index(gpio);
+	else if (strncmp(chip, "NCT5", 4) == 0)
+		ret = nct5xxx_get_gpio_dir_index(gpio);
+
+	return ret;
 }
 
+
+
+
+int sio_gpio_get_en_ldn(char *name, int gpio)
+{
+	int quotient, ldn = -1;
+
+	quotient = gpio / 10;
+
+	if (strncmp(name, "NCT6776", 7) == 0) {
+		if (quotient == 0 || quotient == 10) /* FIXME */
+			ldn = 8;
+		else if (quotient >= 1 && quotient <= 7)
+			ldn = 9;
+		else if (quotient == 8 || quotient == 9)
+			ldn = 7;
+	} else if (strncmp(name, "NCT6779", 7) == 0) {
+		if (quotient == 0)
+			ldn = 8;
+		else if (quotient >= 1 && quotient <= 8)
+			ldn = 9;
+	} else if (strncmp(name, "NCT5", 4) == 0) {
+		if (quotient == 0)
+			ldn = 8;
+		else if ((quotient >= 2 && quotient <= 5) \
+				|| quotient == 7 || quotient == 8)
+			ldn = 9;
+	}
+
+	return ldn;
+}
+
+int sio_gpio_get_en_offset(char *name, int gpio)
+{
+	int quotient, offset = -1;
+
+	quotient = gpio / 10;
+
+	if (strncmp(name, "NCT6776", 7) == 0) {
+		if (quotient == 0)
+			offset = 1;
+		else if (quotient >= 1 && quotient <= 7)
+			offset = quotient;
+		else if (quotient == 8 || quotient == 9)
+			offset = quotient - 8;
+		else if (quotient == 10) /* FIXME */
+			offset = 2;
+	} else if (strncmp(name, "NCT6779", 7) == 0) {
+		if (quotient == 0)
+			offset = 1;
+		else if (quotient >= 1 && quotient <= 7)
+			offset = quotient;
+		else if (quotient == 8)
+			offset = 0;
+	} else if (strncmp(name, "NCT5", 4) == 0) {
+		if (quotient == 0)
+			offset = 1;
+		else if ((quotient >= 2 && quotient <= 5) || quotient == 7)
+			offset = quotient;
+		else if (quotient == 8)
+			offset = 0;
+	}
+
+	return offset;
+}
+
+int sio_gpio_get_ldn(char *name, int gpio)
+{
+	int quotient, ldn = -1;
+
+	quotient = gpio / 10;
+
+	if (strncmp(name, "NCT6776", 7) == 0) {
+		if (quotient == 0 || quotient == 1)
+			ldn = 8;
+		else if (quotient >= 2 && quotient <= 5)
+			ldn = 9;
+		else if (quotient >= 6 && quotient <= 9)
+			ldn = 7;
+		else if (quotient == 10) /* FIXME */
+			ldn = 17;
+	} else if (strncmp(name, "NCT6779", 7) == 0) {
+		if (quotient == 0 || quotient == 1)
+			ldn = 8;
+		else if (quotient >= 2 && quotient <= 5)
+			ldn = 9;
+		else if (quotient >= 6 && quotient <=8)
+			ldn = 7;
+	} else if (strncmp(name, "NCT5", 4) == 0) {
+		if (quotient == 0)
+			ldn = 8;
+		else if (quotient >= 2 && quotient <= 5)
+			ldn = 9;
+		else if (quotient == 7 || quotient == 8)
+			ldn = 7;
+	}
+
+	return ldn;
+}

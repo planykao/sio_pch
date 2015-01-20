@@ -114,6 +114,11 @@ unsigned int sio_ilpc2ahb_readl(int lr, int hr);
 
 int f71889ad_get_gpio_dir_index(int gpio);
 int nct_get_gpio_dir_index(int gpio);
+int nct5xxx_get_gpio_dir_index(int gpio);
+void nct5xxx_multi_func_pin(int gpio);
 int sio_get_gpio_dir_index(char *chip, int gpio);
 
+int sio_gpio_get_en_ldn(char *name, int gpio);
+int sio_gpio_get_en_offset(char *name, int gpio);
+int sio_gpio_get_ldn(char *name, int gpio);
 #endif

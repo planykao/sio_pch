@@ -18,10 +18,11 @@ long int readl(long int addr)
 	return inl(PCI_CONFIG_DATA);
 }
 
+#ifdef SCAN_PCI
 int main(void)
 {
 	int i;
-	long int data;
+	unsigned int data;
 
 	if (iopl(3)) {
 		perror(NULL);
@@ -38,4 +39,15 @@ int main(void)
 
 	return 0;
 }
+#else
+unsigned int scan_pch_gpio_base(void)
+{
+	if (iopl(3)) {
+		perror(NULL);
+		exit(1);
+	}
+
+	return (readl(PCI_CONF1_ADDRESS(0, PCI_DEVFN(0x1F, 0x0), 0x48)) - 1);
+}
+#endif
 

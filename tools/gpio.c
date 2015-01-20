@@ -20,16 +20,26 @@
 #include <libpch.h>
 #include <libsio.h>
 
+struct chip
+{
+	char name[10];
+	int kind;
+};
+
 void usage(int);
 int read_config(char *, char *, unsigned int *);
-static void gpio_config(int, int, unsigned int);
-static void sio_gpio_config(int, int, char *);
+static void pch_gpio_config(int, int, unsigned int);
+static int sio_gpio_config(int, int, struct chip *);
+static int nct_get_kind(struct chip *);
+
+enum nct_kinds {NCT6776, NCT6779D, NCT5533D};
 
 int total;
 
 int main(int argc, char *argv[])
 {
-	char args, *filename, chip[10];
+	struct chip chip;
+	char args, *filename;
 	int i = 0, gpio[10] = {-1}, level = -1;
 	unsigned int gpio_base_addr;
 
@@ -72,19 +82,21 @@ int main(int argc, char *argv[])
 		usage(1);
 
 	/* read configuration file */
-	read_config(filename, chip, &gpio_base_addr);
-	DBG("chip = %s, addr = %x\n", chip, gpio_base_addr);
+	read_config(filename, chip.name, &gpio_base_addr);
+	DBG("chip.name = %s, addr = %x\n", chip.name, gpio_base_addr);
 
 	/* test start */
-	if (strncmp(chip, "PCH", 3) == 0) {
+	if (strncmp(chip.name, "PCH", 3) == 0) {
 		for (i = 0; i < total; i++) {
-			gpio_config(gpio[i], level, gpio_base_addr);
+			pch_gpio_config(gpio[i], level, gpio_base_addr);
 		}
 	} else {
 		for (i = 0; i < total; i++) {
 			EFER = gpio_base_addr;
 			EFDR = EFER + 1;
-			sio_gpio_config(gpio[i], level, chip);
+			sio_enter(chip.name);
+			sio_gpio_config(gpio[i], level, &chip);
+			sio_exit();
 		}
 	}
 	/* test end */
@@ -133,7 +145,7 @@ int read_config(char *filename, char *chip, unsigned int *address)
 }
 
 /* Set gpio direction to output and pull HIGH or LOW  */
-static void gpio_config(int gpio, int level, unsigned int gpio_base_addr)
+static void pch_gpio_config(int gpio, int level, unsigned int gpio_base_addr)
 {
 	unsigned long int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
 	int new_gpio;
@@ -148,15 +160,55 @@ static void gpio_config(int gpio, int level, unsigned int gpio_base_addr)
 	printf("Set GPIO[%d] Level to %s\n", gpio, level ? "HIGH" : "LOW");
 }
 
-static void sio_gpio_config(int gpio, int level, char *chip)
+static int nct_get_kind(struct chip *chip)
 {
-	int index;
+	if (strncmp(chip->name, "NCT6776", 7) == 0)
+		chip->kind = NCT6776;
+	else if (strcmp(chip->name, "NCT6779D") == 0)
+		chip->kind = NCT6779D;
+	else if (strcmp(chip->name, "NCT5533D") == 0)
+		chip->kind = NCT5533D;
+	else {
+		ERR("%s: Unsupport Chip: %s!\n", __func__, chip->name);
+		return -1;
+	}
 
-	/* Enable GPIO7 group */
-	sio_gpio_enable(NCT_GPIO7_EN_LDN, GPIO7);
-	/* Select GPIO7 */
-	sio_select(NCT_GPIO7_LDN);
-	index = sio_get_gpio_dir_index(chip, gpio);
+	return 0;
+}
+
+static int sio_gpio_config(int gpio, int level, struct chip *chip)
+{
+	int index, ldn, offset;
+
+	/* Get chip.kind */
+	if (nct_get_kind(chip))
+		return -1;
+
+	/* setup multi-function pin for NCT5533D, this should be done by BIOS. */
+	if (strncmp(chip->name, "NCT5", 4) == 0) {
+		nct5xxx_multi_func_pin(gpio);
+	}
+
+	/* Get GPIO enable logical device number */
+	ldn = sio_gpio_get_en_ldn(chip->name, gpio);
+	offset = sio_gpio_get_en_offset(chip->name, gpio);
+	DBG("gpio = %d, enldn = %d, offset = %d\n", gpio, ldn, offset);
+	if (ldn == -1 || offset == -1) {
+		ERR("ldn = %d, offset = %d, %s not support or GPIO%d incorrect!\n", \
+				ldn, offset, chip, gpio);
+		exit(1);
+	}
+
+	sio_gpio_enable(ldn, offset);
+	ldn = sio_gpio_get_ldn(chip->name, gpio);
+	sio_select(ldn);
+	index = sio_get_gpio_dir_index(chip->name, gpio);
+	DBG("ldn = %d, index = %x\n", ldn, index);
+	if (index == -1) {
+		ERR("GPIO%d incorrect!\n", gpio);
+		exit(1);
+	}
+
 	sio_gpio_dir_out(gpio, level, index, NCT_GPIO_OUT);
 
 	printf("Set GPIO[%d] Level to %s\n", gpio, level ? "HIGH" : "LOW");

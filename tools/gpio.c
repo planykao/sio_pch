@@ -29,8 +29,11 @@ struct chip
 void usage(int);
 int read_config(char *, char *, unsigned int *);
 static void pch_gpio_config(int, int, unsigned int);
+static int pch_gpio_blink_config(int , int , unsigned int);
 static int sio_gpio_config(int, int, struct chip *);
 static int nct_get_kind(struct chip *);
+
+extern void initcheck(void);
 
 enum nct_kinds {NCT6776, NCT6779D, NCT5533D};
 
@@ -40,8 +43,10 @@ int main(int argc, char *argv[])
 {
 	struct chip chip;
 	char args, *filename;
-	int i = 0, gpio[10] = {-1}, level = -1;
+	int i = 0, gpio[10] = {-1}, level = -1, blink = 0, ret;
 	unsigned int gpio_base_addr;
+
+	initcheck();
 
 	if (iopl(3)) {
 		perror(NULL);
@@ -49,8 +54,11 @@ int main(int argc, char *argv[])
 	}
 
 	/* parsing arguments */
-	while ((args = getopt(argc, argv, "c:g:ho:")) != -1) {
+	while ((args = getopt(argc, argv, "bc:g:ho:")) != -1) {
 		switch (args) {
+			case 'b':
+				blink = 1;
+				break;
 			case 'c':
 				filename = optarg;
 				break;
@@ -78,8 +86,9 @@ int main(int argc, char *argv[])
 	DBG("level = %d\n", level);
 #endif
 
-	if (filename == NULL || gpio[0] == -1 || level == -1)
+	if (filename == NULL || gpio[0] == -1 || level == -1) {
 		usage(1);
+	}
 
 	/* read configuration file */
 	read_config(filename, chip.name, &gpio_base_addr);
@@ -88,7 +97,15 @@ int main(int argc, char *argv[])
 	/* test start */
 	if (strncmp(chip.name, "PCH", 3) == 0) {
 		for (i = 0; i < total; i++) {
-			pch_gpio_config(gpio[i], level, gpio_base_addr);
+			if (blink == 1) {
+				if (pch_gpio_blink_config(gpio[i], level, gpio_base_addr)) {
+					ERR("only support GPIO0 to GPIO31.\n");
+					usage(1);
+				}
+
+			} else {
+				pch_gpio_config(gpio[i], level, gpio_base_addr);
+			}
 		}
 	} else {
 		for (i = 0; i < total; i++) {
@@ -108,10 +125,14 @@ void usage(int i)
 {
 	if (i) {
 		printf("Usage: ./gpio [-c config -g GPIOs -o num]\n");
+		printf("Usage: ./gpio [-c config -g GPIOs -b -o num]\n");
 		printf("Usage: ./gpio [-h]\n\n");
+		printf("  -b,                set GPIO to blink, only support PCH GPIO0 to GPIO31,\n");
+		printf("                     use argument \"o\" to enable/disable blink function.\n");
 		printf("  -c, <config_file>  configuration file for target board\n");
 		printf("  -g, #              GPIO number\n");
 		printf("  -o, #              output level, 1 is HIGH, 0 is LOW\n");
+		printf("                     if, \"b\" is set, 1 is enalbe, 0 is disable\n");
 		printf("  -h,                print this message and quit\n\n");
 	} else {
 		printf("Usage: [-c config|-g GPIOs|-h|-o]\n");
@@ -158,6 +179,27 @@ static void pch_gpio_config(int gpio, int level, unsigned int gpio_base_addr)
 
 	DBG("gpio_sel_addr = %x, gp_lvl_addr =%x\n", gp_io_sel_addr, gp_lvl_addr);
 	printf("Set GPIO[%d] Level to %s\n", gpio, level ? "HIGH" : "LOW");
+}
+
+/* Set gpio blink register */
+static int pch_gpio_blink_config(int gpio, int value, unsigned int gpio_base_addr)
+{
+	unsigned long int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
+	int new_gpio;
+
+	if (gpio > 31) /* only support GPIO0 to GPIO31 */
+		return -1;
+
+	/* Set gpio_out direction to output and pull low or high. */
+	new_gpio = gpio_setup_addr(&gpio_use_sel_addr, &gp_io_sel_addr, \
+                               &gp_lvl_addr, gpio, gpio_base_addr);
+	gpio_enable(gpio_use_sel_addr, new_gpio);
+	gpio_blink(gpio_base_addr, new_gpio, value);
+
+	DBG("gpio_sel_addr = %x, gp_lvl_addr =%x\n", gp_io_sel_addr, gp_lvl_addr);
+	printf("%s GPIO[%d] blink.\n", value ? "Enalbe" : "Disable", gpio);
+
+	return 0;
 }
 
 static int nct_get_kind(struct chip *chip)

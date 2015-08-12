@@ -1,10 +1,10 @@
 # objects
-OBJS = $(TOOLS_DIR)/libpch.o $(TOOLS_DIR)/libsio.o
+OBJS = $(TOOLS_DIR)/libpch.o $(TOOLS_DIR)/libsio.o $(TOOLS_DIR)/useless_crypto.o
 SCAN_SIO_OBJS = $(TOOLS_DIR)/libsio.o
 I2C_OBJS = $(TOOLS_DIR)/i2cbusses.o $(TOOLS_DIR)/util.o $(TOOLS_DIR)/scan_pci.o $(TOOLS_DIR)/libpch.o
 
 # Tools
-TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio scan_pci i2cget nct6683d
+TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio i2cget nct6683d
 
 all: $(addprefix $(TOOLS_DIR)/,$(TOOLS_TARGET))
 
@@ -40,6 +40,9 @@ $(TOOLS_DIR)/libpch.o: $(TOOLS_DIR)/libpch.c $(INCLUDE)/libpch.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(TOOLS_DIR)/libsio.o: $(TOOLS_DIR)/libsio.c $(INCLUDE)/libsio.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TOOLS_DIR)/useless_crypto.o: $(TOOLS_DIR)/useless_crypto.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(TOOLS_DIR)/i2cbusses.o: $(TOOLS_DIR)/i2cbusses.c $(INCLUDE)/i2cbusses.h $(INCLUDE)/linux/i2c-dev.h

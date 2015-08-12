@@ -26,6 +26,7 @@ i.e, GPIO loopback testing on S0361:
 GPIO output test (measure the voltage)
 ================================================================================
 Usage: ./gpio [-c config -g GPIOs -o num]
+Usage: ./gpio [-c config -g GPIOs -b -o num]
 Usage: ./gpio [-h]
 
   -c, <config_file>  configuration file for target board

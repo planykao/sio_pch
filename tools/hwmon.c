@@ -31,6 +31,12 @@
 /* The base address is 0x1E720000 */
 #define HIGH_CTL_BASE_ADDR   0x1E72
 
+#define TEMP1_CRIT_PATH "/sys/class/hwmon/hwmon1/device/temp1_crit"
+#define ATTR_MAX 128
+
+#define AST_CALIBRATION
+#undef AST_CALIBRATION
+
 /* 
  * Define the struct for Sensor.
  * Type 0: Temperature; 1: FAN Speed; 2: Voltage > 0 and < 2.048V; 
@@ -61,6 +67,9 @@ struct sensor {
 
 void bank_select(unsigned int address, unsigned int bank);
 void init_peci(void);
+#if 1 /* plany@20150122 */
+unsigned int peci_read(int index);
+#endif
 
 unsigned int read_hwmon_base_address(void);
 
@@ -76,14 +85,18 @@ float read_ast_fan(unsigned int index, ...);
 float read_ast_voltage(unsigned int index, ...);
 float read_ast_voltage1(unsigned int index, ...);
 
+#ifdef AST_CALIBRATION
 void get_vol_calibration(void);
-int calibration;
+static int calibration;
+#endif
 
 void usage(void);
 
 int type_list(struct sensor *sensors);
 int ast_type_list(struct sensor *sensors);
 void pin_list(char *chip_model, struct sensor *sensors);
+
+extern void initcheck(void);
 
 char chip_model[10];
 
@@ -113,6 +126,8 @@ int main(int argc, char *argv[])
 		read_ast_voltage,
 		read_ast_voltage1
 	};
+
+	initcheck();
 
 	/* change I/O privilege level to all access. For Linux only. */
 	if (iopl(3)) {
@@ -222,7 +237,9 @@ int main(int argc, char *argv[])
 		 * Entended Function Mode.
 		 */
 		init_peci();
+#ifdef AST_CALIBRATION /* plany@20150122 */
 		get_vol_calibration();
+#endif
 	} else {
 		/* Read HW monitor base address */
 		hw_base_addr = read_hwmon_base_address();
@@ -378,6 +395,84 @@ void init_peci(void)
 	}
 }
 
+unsigned int peci_read(int index)
+{
+	unsigned int data;
+	int timeout = 0, fd, len = 0, tjmax;
+	char tjmax_str[ATTR_MAX];
+
+	/* Enable PECI, Negotiation Timing = 0x40, Clock divider = 2 */
+	sio_ilpc2ahb_writel(0x14002, LOW_PECI_BASE_ADDR + 0x00, HIGH_PECI_BASE_ADDR);
+	DBG("%X = %X\n", (HIGH_PECI_BASE_ADDR << 16) | LOW_PECI_BASE_ADDR, \
+			sio_ilpc2ahb_readl(LOW_PECI_BASE_ADDR + 0x00, HIGH_PECI_BASE_ADDR));
+
+	/* Read length = 2, Write length = 1, CPU address = 0x30 */
+	sio_ilpc2ahb_writel(0x20100 | index, LOW_PECI_BASE_ADDR + 0x04, HIGH_PECI_BASE_ADDR);
+	DBG("%X = %X, index = %X\n", (HIGH_PECI_BASE_ADDR << 16) | (LOW_PECI_BASE_ADDR + 0x04), \
+			sio_ilpc2ahb_readl(LOW_PECI_BASE_ADDR + 0x04, HIGH_PECI_BASE_ADDR), index);
+
+
+	/* Write Command Code (0x01) into write Register */
+	sio_ilpc2ahb_writel(0x01, LOW_PECI_BASE_ADDR + 0x0C, HIGH_PECI_BASE_ADDR);
+	DBG("%X = %X\n", (HIGH_PECI_BASE_ADDR << 16) | (LOW_PECI_BASE_ADDR + 0x0C), \
+			sio_ilpc2ahb_readl(LOW_PECI_BASE_ADDR + 0x0C, HIGH_PECI_BASE_ADDR));
+
+	/* Fire Engine */
+	DBG("Status reg = %X\n", sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR));
+	sio_ilpc2ahb_writel(0x01, LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR);
+	DBG("%X = %X\n", (HIGH_PECI_BASE_ADDR << 16) | (LOW_PECI_BASE_ADDR + 0x08), \
+			sio_ilpc2ahb_readl(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR));
+	DBG("Status reg = %X\n", sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR));
+
+	/* Check the status is Idle or Busy */
+	while (sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR) & 0x1) {
+		usleep(10000);
+		DBG("Status reg = %X\n", sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR));
+#if 0
+		timeout++;
+		if (timeout == 30) {
+			/* TODO Fire to engine bit will not auto clear if we query a 
+			   non-exist address*/
+			DBG("%s: timeout\n", __func__);
+			break;
+		}
+#endif
+	}
+	while ((sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR) >> 1) & 0x1) {
+		usleep(10000);
+		DBG("Status reg = %X\n", sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR));
+	}
+	if ((sio_ilpc2ahb_read(LOW_PECI_BASE_ADDR + 0x08, HIGH_PECI_BASE_ADDR) >> 2) & 0x1) {
+//		ERR("PECI read fail.\n");
+		return 0;
+	}
+
+	data = sio_ilpc2ahb_readl(LOW_PECI_BASE_ADDR + 0x2C, HIGH_PECI_BASE_ADDR);
+	DBG("%X = %X\n", (HIGH_PECI_BASE_ADDR << 16) | LOW_PECI_BASE_ADDR + 0x2C, data);
+
+	fd = open(TEMP1_CRIT_PATH, O_RDONLY);
+	if (fd < 0) {
+		DBG("open sysfs entry fail.\n");
+		return 0;
+	}
+
+	len = read(fd, tjmax_str, sizeof(tjmax_str));
+	close(fd);
+
+	if (len == 0) {
+		DBG("read sysfs entry fail.\n");
+		return 0;
+	}
+
+	tjmax_str[len - 1] = '\0';
+	tjmax = (strtol(tjmax_str, (char **)NULL, 10)) / 1000;
+
+	data = tjmax - (((~(data)) >> 6) & 0x1FF) + 1;
+	DBG("data = %X\n", data);
+
+	return data;
+}
+
 /* 
  * Read HW monitor base address 
  * The base address of the Address Port and Data Port is specified in registers 
@@ -411,28 +506,30 @@ unsigned int read_hwmon_base_address(void)
 	return addr;
 }
 
+#ifdef AST_CALIBRATION
 void get_vol_calibration(void)
 {
 	int ret;
 
 	if (!strcmp(chip_model, "AST1300")) {
-		/* TODO needs to modify */
+		/* TODO 
+		 * needs to disable firmware and read the compensation value.
+		 */
 		sio_ilpc2ahb_write(0x2F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
 		usleep(500000);
 		sio_ilpc2ahb_writel(0x1000006F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
-		
-//		sio_ilpc2ahb_writel(0x6F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
-//		sio_ilpc2ahb_writel(0x00, LOW_ADC_BASE_ADDR + 0, HIGH_ADC_BASE_ADDR);
-//		sio_ilpc2ahb_writel(0x00, LOW_ADC_BASE_ADDR + 1, HIGH_ADC_BASE_ADDR);
-//		sio_ilpc2ahb_writel(0x10, LOW_ADC_BASE_ADDR + 2, HIGH_ADC_BASE_ADDR);
+
+#if 0
+		sio_ilpc2ahb_writel(0x6F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
+		sio_ilpc2ahb_writel(0x00, LOW_ADC_BASE_ADDR + 0, HIGH_ADC_BASE_ADDR);
+		sio_ilpc2ahb_writel(0x00, LOW_ADC_BASE_ADDR + 1, HIGH_ADC_BASE_ADDR);
+		sio_ilpc2ahb_writel(0x10, LOW_ADC_BASE_ADDR + 2, HIGH_ADC_BASE_ADDR);
+#endif
 
 		DBG("ADC00 = %x\n", sio_ilpc2ahb_readl(LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR));
 
 		sleep(2);
-
 		ret = (int)sio_ilpc2ahb_readl(LOW_ADC_BASE_ADDR + 0x28, HIGH_ADC_BASE_ADDR);
-		
-		
 		DBG("ADC28 = %x\n", ret);
 	
 		if ((ret >> 8) & 0x1)
@@ -440,19 +537,20 @@ void get_vol_calibration(void)
 		else
 			calibration = 0x0 - (ret & 0x3FF);
 		
-		sio_ilpc2ahb_writel(0x1000006F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
+		sio_ilpc2ahb_writel(0x2F, LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR);
 		DBG("ADC00 = %x\n", sio_ilpc2ahb_readl(LOW_ADC_BASE_ADDR, HIGH_ADC_BASE_ADDR));
 	} else if (!strcmp(chip_model, "AST1400")) {
 		DBG("compensating = 0x%x\n", (int)sio_ilpc2ahb_readl(0x1650, 0x1E72));
 		DBG("compensating = %d\n", (int)sio_ilpc2ahb_readl(0x1650, 0x1E72));
 		calibration = 0x200 - (int)sio_ilpc2ahb_readl(0x1650, 0x1E72);
 	} else {
-		printf("Doesn't support this chip: %s\n", chip_model);
+		printf("Unsupported chip: %s\n", chip_model);
 		exit(-1);
 	}
 
 	DBG("calibration = %d\n", calibration);
 }
+#endif
 
 void bank_select(unsigned int address, unsigned int bank)
 {
@@ -559,6 +657,7 @@ float read_ast_temperature_peci(unsigned int index, ...)
 	int low_addr;
 	int high_addr;
 
+#if 0
 	low_addr = LOW_DATA_BASE_ADDR + index;
 	high_addr = HIGH_DATA_BASE_ADDR;
 
@@ -567,6 +666,10 @@ float read_ast_temperature_peci(unsigned int index, ...)
 	data_l = sio_ilpc2ahb_read(low_addr, high_addr);
 	data_h = sio_ilpc2ahb_read(low_addr + 1, high_addr);
 	data = data_l | (data_h << 8);
+
+#else /* plany@20150122 */
+	data = peci_read(index);
+#endif
 
 	return ((float) data);
 }
@@ -671,7 +774,9 @@ float read_ast_voltage(unsigned int index, ...)
 	 *     or
 	 *         V = RAW_DATA * (R1 + R2) / R2 * 2.5 / 1024
 	 */
+#ifdef AST_CALIBRATION
 	data += calibration;
+#endif
 	if (strcmp(chip_model, "AST1300") == 0)
 		result = (((float) data) * ((float) par1) * 25 / 1023 / 100);
 	else if (strcmp(chip_model, "AST1400") == 0)
@@ -707,7 +812,9 @@ float read_ast_voltage1(unsigned int index, ...)
 	va_end(args);
 
 	/* Ask BIOS to get the ratio */
+#ifdef AST_CALIBRATION
 	data += calibration;
+#endif
 	if (!strcmp(chip_model, "AST1300"))
 		result =  (((float) data) * multiplier / 1023);
 	else
@@ -983,9 +1090,17 @@ void pin_list(char *chip_model, struct sensor *sensors)
 		if (strcmp(sensors->pin_name, "AA21") == 0) { /* PECI */
 			if (strcmp(sensors->name, "TEMP_CPU0") == 0 ||
 				strcmp(sensors->name, "PECI_CPU") == 0)
+#if 0 /* plany@20150122 */
 				sensors->index = 0x50;
+#else
+				sensors->index = 0x30;
+#endif
 			else if (strcmp(sensors->name, "TEMP_CPU1") == 0)
+#if 0 /* plany@20150122 */
 				sensors->index = 0x54;
+#else
+				sensors->index = 0x31;
+#endif
 			else if (strcmp(sensors->name, "TEMP_CPU0_VR") == 0) {
 				sensors->index = 0x5C;
 			} else {

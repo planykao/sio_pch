@@ -10,7 +10,11 @@
 #include <libpch.h>
 
 #define LOW_GPIO_BASE_ADDR  0x0000 /* Refer to AST Datasheet page 416 */
-#define HIGH_GPIO_BASE_ADDR 0x1E78		
+#define HIGH_GPIO_BASE_ADDR 0x1E78
+
+#define AST_SCU_BASE_HIGH_ADDR        0x1E6E
+#define AST_SCU_BASE_LOW_ADDR         0x2000
+#define AST_SCU_UNLOCK                0x1688A8A8
 
 #define PAIR_GPIO_NUM 3
 #define AST_GPIO_NUM  19
@@ -63,6 +67,8 @@ int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
 int check_arguments(char *argv[], int *, int *, int *, int *);
 int read_config(char *, struct cpld_cfg *, struct ast_cpld_cfg *, char *);
 
+extern void initcheck(void);
+
 unsigned long int gpio_base_addr;
 static int total_pair_pin_num;
 static int total_cfg_pin_num = 3;
@@ -73,6 +79,8 @@ int main(int argc, char *argv[])
 	char chip[10];
 	struct cpld_cfg *cpld;
 	struct ast_cpld_cfg *ast_cpld;
+
+	initcheck();
 
 	if (argc < 6) {
 		usage();
@@ -291,6 +299,37 @@ int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 	unsigned char data;
 	int i, ret, offset;
 
+	/* Unlock SCU register and dump register from offset 0x8C */
+	unsigned long int tmp;
+	sio_ilpc2ahb_writel(AST_SCU_UNLOCK, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
+	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x8C, AST_SCU_BASE_HIGH_ADDR);
+	printf("SCU 0x8C = %x\n", tmp);
+	tmp |= (0x1 << 25);
+	sio_ilpc2ahb_writel(tmp, AST_SCU_BASE_LOW_ADDR + 0x8C, AST_SCU_BASE_HIGH_ADDR);
+	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x8C, AST_SCU_BASE_HIGH_ADDR);
+	printf("SCU 0x8C = %x\n", tmp);
+
+	sio_ilpc2ahb_writel(AST_SCU_UNLOCK, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
+	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x84, AST_SCU_BASE_HIGH_ADDR);
+	printf("SCU 0x84 = %x\n", tmp);
+	tmp |= (0x1 << 4);
+	sio_ilpc2ahb_writel(tmp, AST_SCU_BASE_LOW_ADDR + 0x84, AST_SCU_BASE_HIGH_ADDR);
+	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x84, AST_SCU_BASE_HIGH_ADDR);
+	printf("SCU 0x84 = %x\n", tmp);
+	sio_ilpc2ahb_write(0x0, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
+
+	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x91, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x91 = %x\n", tmp);
+	sio_ilpc2ahb_write(0x1, LOW_GPIO_BASE_ADDR + 0x91, HIGH_GPIO_BASE_ADDR);
+	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x91, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x91 = %x\n", tmp);
+
+	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x6A, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x6A = %x\n", tmp);
+	sio_ilpc2ahb_write(0x1, LOW_GPIO_BASE_ADDR + 0x6A, HIGH_GPIO_BASE_ADDR);
+	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x6A, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x6A = %x\n", tmp);
+
 	/* Setup GPIOs for Pair */
 	for (i = 0; i < total_pair_pin_num; i++) {
 		ret = ast_get_gpio_offset(cpld->pair_g[i], gg);
@@ -311,6 +350,7 @@ int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 		 */
 		data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
                                  HIGH_GPIO_BASE_ADDR);
+		DBG("data = %x\n", data);
 		data |= (0x1 << offset);
 		sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
                            HIGH_GPIO_BASE_ADDR);
@@ -476,6 +516,8 @@ int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
 		return 1;
 	}
 
+	exit(1);
+
 	offset = atoi(cpld->sendbit + 1);
 	ast_cpld_trigger(gg[ret].data_offset, offset);
 
@@ -585,11 +627,62 @@ void cpld_trigger(int pair, struct cpld_cfg *cpld)
 	set_gpio(cpld->sendbit[n], GPIO_LOW);
 }
 
+#if 0
+/* customize code, turn on/off led when on is 1/0, plany@20150312 */
+static unsigned int read_led_status(void)
+{
+	unsigned int buf;
+
+	outl_p(0x70, 0x6F);
+	buf = inl_p(0x71);
+	
+	return buf;
+}
+
+static void write_led_status(unsigned int data)
+{
+	outl_p(0x70, 0x6F);
+	outl_p(0x71, data);
+}
+
+/*
+ * LED(+) is JGPIO pin5(GPIO61)
+ * LED(-) is JGPIO pin3(GPIO18)
+ *
+ * if the power on status of any pair is set to bypass, turn on the LED.
+ * if the power on status of all pairs are set to passthrough, turn off the LED.
+ */
+static void customize_led_config(struct cpld_cfg *cpld)
+{
+	unsigned long int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
+	int new_gpio, i;
+	unsigned long int status;
+
+	/* check LED status */
+
+	/* config the corresponding GPIOs */
+	new_gpio = gpio_setup_addr(&gpio_use_sel_addr, &gp_io_sel_addr, \
+                               &gp_lvl_addr, 13, gpio_base_addr);
+	gpio_dir_out(gp_io_sel_addr, gp_lvl_addr, new_gpio, 0);
+	new_gpio = gpio_setup_addr(&gpio_use_sel_addr, &gp_io_sel_addr, \
+                               &gp_lvl_addr, 61, gpio_base_addr);
+	if (read_led_status()) { /* turn off LED */
+		gpio_set(gp_lvl_addr, new_gpio, 0);
+	} else { /* turn on LED */
+		gpio_set(gp_lvl_addr, new_gpio, 1);
+	}
+}
+#endif
+
 void bypass_setup(int pair, int on, int off, int wdt, struct cpld_cfg *cpld)
 {
 	pair_setup(pair, cpld);
 	cfg_setup(pair, on, off, wdt, cpld);
 	cpld_trigger(pair, cpld);
+
+#if 0 /* customize code, turn on/off led */
+	customize_led_config(cpld);
+#endif
 }
 
 /*

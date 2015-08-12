@@ -53,11 +53,13 @@
 #define FINTEK_GPIO_OUT        1
 #define FINTEK_GPIO_LDN        0x06
 #define FIN_WDT_LDN            0x07
+#define FIN_WDT_EN_OFFSET      0x00
 #define FIN_WDT_CONF_REG       0xF0
 #define FIN_WDT_CONF_REG1      0xF5
 #define FIN_WDT_CONF_REG2      0xF6
 #define FIN_WDOUT_EN           (0x1 << 7)
 #define FIN_WD_RST_EN          (0x1 << 0)
+#define FIN_WD_PSWIDTH_OFFSET  0
 #define FIN_WD_UNIT_OFFSET     3
 #define FIN_WD_PULSE_OFFSET    4
 #define FIN_WD_EN_OFFSET       5

@@ -14,6 +14,8 @@
 #define GP_LVL2 0x38 /* GPIO Level2 for Input or Output offset */
 #define GP_LVL3 0x48 /* GPIO Level3 for Input or Output offset */
 
+#define GPO_BLINK 0x18 /* GPIO Blink Enable Register */
+
 #define GPIO_USE_SEL1_ADDR(addr) (addr + GPIO_USE_SEL1) 
 #define GPIO_USE_SEL2_ADDR(addr) (addr + GPIO_USE_SEL2)
 #define GPIO_USE_SEL3_ADDR(addr) (addr + GPIO_USE_SEL3)
@@ -36,5 +38,7 @@ void gpio_set(unsigned long int gpio_lvl_addr, int gpio, int value);
 void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio);
 void gpio_dir_out(unsigned long int gp_io_sel_addr, \
                   unsigned long int gp_lvl_addr, int gpio, int value);
+
+void gpio_blink(unsigned long int base, int gpio, int value);
 
 #endif

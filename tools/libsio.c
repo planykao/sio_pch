@@ -40,6 +40,14 @@ void sio_write(int reg, int val)
 	outb_p(val, EFDR); /* Send val_w at FEDR */
 }
 
+#if 0 /* plany@20150123 */
+void sio_writel(unsigned int reg, unsigned int val)
+{
+	outl_p(reg, EFER);
+	outl_p(val, EFDR);
+}
+#endif
+
 /* Read value from register of SuperIO */
 int sio_read_reg(int index, int address)
 {
@@ -59,7 +67,7 @@ void sio_write_reg(int index, int address)
  */
 void sio_select(int ldnum)
 {
-	DBG("SIO_LDSEL_REG = %x, ldnum = %x\n", SIO_LDSEL_REG, ldnum);
+//	DBG("SIO_LDSEL_REG = %x, ldnum = %x\n", SIO_LDSEL_REG, ldnum);
 	outb_p(SIO_LDSEL_REG, EFER);
 	outb_p(ldnum, EFDR);
 }
@@ -70,9 +78,9 @@ void sio_logical_device_enable(int bit)
 	
 	/* Read the value from CR 30h of Logical Device register */
 	b = sio_read(SIO_ENABLE_REG);
-	DBG("read from CR30h = %x\n", b);
+//	DBG("read from CR30h = %x\n", b);
 	b |= (0x1 << bit); /* Set bitN to 1 to enable Logical Device */
-	DBG("write %x to CR30h\n", b);
+//	DBG("write %x to CR30h\n", b);
 	/* Write the value to CR 30h of Logical device */
 	sio_write(SIO_ENABLE_REG, b);
 }

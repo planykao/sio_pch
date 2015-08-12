@@ -15,6 +15,8 @@ static int gpio_set_then_read(int gpio_out, int gpio_in, int value);
 static int sio_gpio_set_then_read(int gpio_out, int gpio_in, int value, char *chip);
 static void help(void);
 
+extern void initcheck(void);
+
 unsigned long int base_addr;
 
 /* Set gpio_out direction to output and read from gpio_in */
@@ -139,6 +141,8 @@ int main(int argc, char *argv[])
 	int i, total, pin1, pin2;
 	FILE *fp;
 	char chip[10], args, *filename;
+
+	initcheck();
 
 	/* 
 	 * Change I/O privilege level to all access. For Linux only. 

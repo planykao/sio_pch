@@ -92,3 +92,15 @@ void gpio_dir_out(unsigned long int gp_io_sel_addr, \
 	outl_p(buf, gp_lvl_addr); /* Output the value */
 	DBG("Set GPIO[%d] Level to %s\n", gpio, value ? "HIGH" : "LOW");
 }
+
+void gpio_blink(unsigned long int base, int gpio, int value)
+{
+	unsigned long int buf;
+
+	buf = inl_p(base + GPO_BLINK);
+	buf &= ~(0x1 << gpio);
+	buf |= (value << gpio);
+	outl_p(buf, base + GPO_BLINK);
+	DBG("Set GPIO[%d] blink to %d\n", gpio, value);
+}
+

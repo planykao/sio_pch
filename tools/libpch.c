@@ -5,10 +5,10 @@
 #include <sitest.h>
 
 /* re-assign the gpio number */
-int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
-                            unsigned long int *gp_io_sel_addr, \
-                            unsigned long int *gp_lvl_addr, \
-							int gpio, unsigned long int base_addr)
+int gpio_setup_addr(unsigned int *gpio_use_sel_addr, \
+                    unsigned int *gp_io_sel_addr, \
+                    unsigned int *gp_lvl_addr, \
+                    int gpio, unsigned int base_addr)
 {
 	int new_gpio;
 
@@ -33,18 +33,18 @@ int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
 }
 
 /* Set GPIO to use as a GPIO, no native function */
-void gpio_enable(unsigned long int gpio_use_sel_addr, int gpio)
+void gpio_enable(unsigned int gpio_use_sel_addr, int gpio)
 {
-	unsigned long int buf;
+	unsigned int buf;
 	
 	buf = inl_p(gpio_use_sel_addr); /* Read the original value */
 	buf |= (0x1 << gpio); /* Set the bit to 1 for GPIO mode */
 	outl_p(buf, gpio_use_sel_addr); /* Output the value */
 }
 
-unsigned long int gpio_get(unsigned long int gp_lvl_addr, int gpio)
+unsigned long int gpio_get(unsigned int gp_lvl_addr, int gpio)
 {
-	unsigned long int buf;
+	unsigned int buf;
 
 	buf = inl_p(gp_lvl_addr);
 	buf = (buf >> gpio);
@@ -53,9 +53,9 @@ unsigned long int gpio_get(unsigned long int gp_lvl_addr, int gpio)
 	return buf;
 }
 
-void gpio_set(unsigned long int gp_lvl_addr, int gpio, int value)
+void gpio_set(unsigned int gp_lvl_addr, int gpio, int value)
 {
-	unsigned long int buf;
+	unsigned int buf;
 
 	buf = inl_p(gp_lvl_addr); /* Read the original value */
 	buf &= ~(0x1 << gpio); /* Set the bit to 0 for low level */
@@ -64,9 +64,9 @@ void gpio_set(unsigned long int gp_lvl_addr, int gpio, int value)
 	DBG("Set GPIO Level to %d\n", value);
 }
 
-void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio)
+void gpio_dir_in(unsigned int gp_io_sel_addr, int gpio)
 {
-	unsigned long int buf;
+	unsigned int buf;
 
 	buf = inl_p(gp_io_sel_addr); /* Read the original value */
 	DBG("buf = %x, gpio = %d\n", buf, gpio);
@@ -75,10 +75,10 @@ void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio)
 	outl_p(buf, gp_io_sel_addr); /* Output the value */
 }
 
-void gpio_dir_out(unsigned long int gp_io_sel_addr, \
-                         unsigned long int gp_lvl_addr, int gpio, int value)
+void gpio_dir_out(unsigned int gp_io_sel_addr, \
+                  unsigned int gp_lvl_addr, int gpio, int value)
 {
-	unsigned long int buf;
+	unsigned int buf;
 	
 	buf = inl_p(gp_io_sel_addr); /* Read the original value */
 	DBG("buf = %x, gpio = %d\n", buf, gpio);
@@ -93,9 +93,9 @@ void gpio_dir_out(unsigned long int gp_io_sel_addr, \
 	DBG("Set GPIO[%d] Level to %s\n", gpio, value ? "HIGH" : "LOW");
 }
 
-void gpio_blink(unsigned long int base, int gpio, int value)
+void gpio_blink(unsigned int base, int gpio, int value)
 {
-	unsigned long int buf;
+	unsigned int buf;
 
 	buf = inl_p(base + GPO_BLINK);
 	buf &= ~(0x1 << gpio);

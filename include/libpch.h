@@ -28,17 +28,17 @@
 #define GP_LVL2_ADDR(addr) (addr + GP_LVL2)
 #define GP_LVL3_ADDR(addr) (addr + GP_LVL3)
 
-int gpio_setup_addr(unsigned long int *gpio_use_sel_addr, \
-                    unsigned long int *gp_io_sel_addr, \
-                    unsigned long int *gp_lvl_addr, \
-                    int gpio, unsigned long int base_addr);
-void gpio_enable(unsigned long int gpio_use_sel_addr, int gpio);
-unsigned long int gpio_get(unsigned long int gpio_lvl_addr, int gpio);
-void gpio_set(unsigned long int gpio_lvl_addr, int gpio, int value);
-void gpio_dir_in(unsigned long int gp_io_sel_addr, int gpio);
-void gpio_dir_out(unsigned long int gp_io_sel_addr, \
-                  unsigned long int gp_lvl_addr, int gpio, int value);
+int gpio_setup_addr(unsigned int *gpio_use_sel_addr, \
+                    unsigned int *gp_io_sel_addr, \
+                    unsigned int *gp_lvl_addr, \
+                    int gpio, unsigned int base_addr);
+void gpio_enable(unsigned int gpio_use_sel_addr, int gpio);
+unsigned long int gpio_get(unsigned int gpio_lvl_addr, int gpio);
+void gpio_set(unsigned int gpio_lvl_addr, int gpio, int value);
+void gpio_dir_in(unsigned int gp_io_sel_addr, int gpio);
+void gpio_dir_out(unsigned int gp_io_sel_addr, \
+                  unsigned int gp_lvl_addr, int gpio, int value);
 
-void gpio_blink(unsigned long int base, int gpio, int value);
+void gpio_blink(unsigned int base, int gpio, int value);
 
 #endif

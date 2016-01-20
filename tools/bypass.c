@@ -31,14 +31,15 @@ struct ast_cpld_cfg
 {
 	char pair_g[12][3];
 	char cfg_g[3][3];
-	char sendbit[3];
+	char sendbit[3][3];
 };
 
 struct gpio_groups
 {
 	char name;
-	unsigned long int data_offset;
-	unsigned long int dir_offset;
+	unsigned int data_offset;
+	unsigned int dir_offset;
+	int shift;
 };
 
 void usage(void);
@@ -58,10 +59,10 @@ void f71889ad_gpio_dir_out(int gpio, int value);
 
 int ast_get_gpio_offset(char *pair_g, struct gpio_groups *gg);
 int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg);
-void ast_pair_setup(int value, unsigned long int data_offset, int offset);
-void ast_cfg_setup(int value, unsigned long int data_offset, int offset);
-void ast_cpld_trigger(unsigned long int data_offset, int offset);
-int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
+void ast_pair_setup(int value, unsigned int data_offset, int offset);
+void ast_cfg_setup(int value, unsigned int data_offset, int offset);
+void ast_cpld_trigger(unsigned int data_offset, int offset);
+int ast_bypass_setup(char *name, int pair, int cfg, struct ast_cpld_cfg *cpld, \
                       struct gpio_groups *gg);
 
 int check_arguments(char *argv[], int *, int *, int *, int *);
@@ -69,9 +70,10 @@ int read_config(char *, struct cpld_cfg *, struct ast_cpld_cfg *, char *);
 
 extern void initcheck(void);
 
-unsigned long int gpio_base_addr;
+unsigned int gpio_base_addr;
 static int total_pair_pin_num;
 static int total_cfg_pin_num = 3;
+static int total_sendbit_num;
 
 int main(int argc, char *argv[])
 {
@@ -122,16 +124,29 @@ int main(int argc, char *argv[])
 
 		if (strncmp(chip, "AST", 3) == 0) {
 			struct gpio_groups gg[AST_GPIO_NUM] = {
-				{'A', 0x00, 0x04}, {'B', 0x01, 0x05}, \
-                {'C', 0x02, 0x06}, {'D', 0x03, 0x07}, \
-				{'E', 0x20, 0x24}, {'F', 0x21, 0x25}, \
-                {'G', 0x22, 0x26}, {'H', 0x23, 0x27}, \
-				{'I', 0x70, 0x74}, {'J', 0x71, 0x75}, \
-                {'K', 0x72, 0x76}, {'L', 0x73, 0x77}, \
-				{'M', 0x78, 0x7C}, {'N', 0x79, 0x7D}, \
-                {'O', 0x7A, 0x7E}, {'P', 0x7B, 0x7F}, \
-				{'Q', 0x80, 0x84}, {'R', 0x81, 0x85}, \
-                {'S', 0x82, 0x86}
+#if 0
+				{'A', 0x00, 0x04, 0}, {'B', 0x01, 0x05, 8}, \
+                {'C', 0x02, 0x06, 16}, {'D', 0x03, 0x07, 24}, \
+				{'E', 0x20, 0x24, 0}, {'F', 0x21, 0x25, 8}, \
+                {'G', 0x22, 0x26, 16}, {'H', 0x23, 0x27, 24}, \
+				{'I', 0x70, 0x74, 0}, {'J', 0x71, 0x75, 8}, \
+                {'K', 0x72, 0x76, 16}, {'L', 0x73, 0x77, 24}, \
+				{'M', 0x78, 0x7C, 0}, {'N', 0x79, 0x7D, 8}, \
+                {'O', 0x7A, 0x7E, 16}, {'P', 0x7B, 0x7F, 24}, \
+				{'Q', 0x80, 0x84, 0}, {'R', 0x81, 0x85, 8}, \
+                {'S', 0x82, 0x86, 16}
+#else
+				{'A', 0x00, 0x04, 0}, {'B', 0x00, 0x04, 8}, \
+                {'C', 0x00, 0x04, 16}, {'D', 0x00, 0x04, 24}, \
+				{'E', 0x20, 0x24, 0}, {'F', 0x20, 0x24, 8}, \
+                {'G', 0x20, 0x24, 16}, {'H', 0x20, 0x24, 24}, \
+				{'I', 0x70, 0x74, 0}, {'J', 0x70, 0x74, 8}, \
+                {'K', 0x70, 0x74, 16}, {'L', 0x70, 0x74, 24}, \
+				{'M', 0x78, 0x7C, 0}, {'N', 0x78, 0x7C, 8}, \
+                {'O', 0x78, 0x7C, 16}, {'P', 0x78, 0x7C, 24}, \
+				{'Q', 0x80, 0x84, 0}, {'R', 0x80, 0x84, 8}, \
+                {'S', 0x80, 0x84, 16}
+#endif
 			};
 
 			if (ast_gpio_init(ast_cpld, gg))
@@ -144,7 +159,7 @@ int main(int argc, char *argv[])
 			 * cfg_g[1] --> CFG2: OFF, 0 for Pass Through, 1 for Bypass.
 			 * cfg_g[2] --> CFG3: ON , 0 for Pass Through, 1 for Bypass.
 			 */
-			if (ast_bypass_setup(pair, wdt | off << 1 | on << 2, ast_cpld, gg))
+			if (ast_bypass_setup(argv[1], pair, wdt | off << 1 | on << 2, ast_cpld, gg))
 				ERR("ast_bypass_setup fail.\n");
 		} else if (strncmp(chip, "F71", 3) == 0) {
 			sio_select(FINTEK_GPIO_LDN);
@@ -165,8 +180,8 @@ int check_arguments(char *argv[], int *pair, int *on, int *off, int *wdt)
 {
 	int i;
 
-	if (atoi(argv[2]) < 1 || atoi(argv[2]) > 8) {
-		ERR("Pair should >= 1 and <= 8\n");
+	if (atoi(argv[2]) < 1) {
+		ERR("Pair should >= 1\n");
 		return 1;
 	}
 
@@ -203,6 +218,11 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
 	else
 		total_pair_pin_num = 3;
 
+	if (!strncmp(filename, "S1451", 5))
+		total_sendbit_num = 2;
+	else
+		total_sendbit_num = 1;
+
 	/* Skip the header */
 	for (i = 0; i < 5; i++)
 		fscanf(fp, "%*[^\n]\n", NULL);
@@ -216,7 +236,10 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
                ast_cpld->pair_g[1], ast_cpld->pair_g[2]);
 		fscanf(fp, "%[^,], %[^,], %[^\n]\n", ast_cpld->cfg_g[0], \
                ast_cpld->cfg_g[1], ast_cpld->cfg_g[2]);
-		fscanf(fp, "%s", ast_cpld->sendbit);
+		if (!strncmp(filename, "S1451", 5))
+			fscanf(fp, "%[^,], %[^\n]\n", ast_cpld->sendbit[0], ast_cpld->sendbit[1]);
+		else
+			fscanf(fp, "%s", ast_cpld->sendbit[0]);
 
 #ifdef DEBUG
 		DBG("\n");
@@ -227,8 +250,8 @@ int read_config(char *filename, struct cpld_cfg *cpld, \
 		for (i = 0; i < total_pair_pin_num; i++)
 			printf("%s ", ast_cpld->cfg_g[i]);
 		printf("\n");
-		for (i = 0; i < total_pair_pin_num / 3; i++)
-			printf("%s ", ast_cpld->sendbit);
+		for (i = 0; i < total_sendbit_num; i++)
+			printf("%s ", ast_cpld->sendbit[i]);
 		printf("\n");
 		printf("=====================================\n");
 #endif
@@ -296,39 +319,44 @@ int ast_get_gpio_offset(char *gpio, struct gpio_groups *gg)
  */
 int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 {
-	unsigned char data;
+	unsigned int data;
 	int i, ret, offset;
 
 	/* Unlock SCU register and dump register from offset 0x8C */
-	unsigned long int tmp;
+	unsigned int tmp;
 	sio_ilpc2ahb_writel(AST_SCU_UNLOCK, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
 	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x8C, AST_SCU_BASE_HIGH_ADDR);
-	printf("SCU 0x8C = %x\n", tmp);
-	tmp |= (0x1 << 25);
+	DBG("SCU 0x8C = %x\n", tmp);
+	tmp |= ((0x1 << 25) | (0x1 << 22));
 	sio_ilpc2ahb_writel(tmp, AST_SCU_BASE_LOW_ADDR + 0x8C, AST_SCU_BASE_HIGH_ADDR);
 	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x8C, AST_SCU_BASE_HIGH_ADDR);
-	printf("SCU 0x8C = %x\n", tmp);
+	DBG("SCU 0x8C = %x\n", tmp);
 
 	sio_ilpc2ahb_writel(AST_SCU_UNLOCK, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
 	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x84, AST_SCU_BASE_HIGH_ADDR);
-	printf("SCU 0x84 = %x\n", tmp);
+	DBG("SCU 0x84 = %x\n", tmp);
 	tmp |= (0x1 << 4);
 	sio_ilpc2ahb_writel(tmp, AST_SCU_BASE_LOW_ADDR + 0x84, AST_SCU_BASE_HIGH_ADDR);
 	tmp = sio_ilpc2ahb_readl(AST_SCU_BASE_LOW_ADDR + 0x84, AST_SCU_BASE_HIGH_ADDR);
-	printf("SCU 0x84 = %x\n", tmp);
+	DBG("SCU 0x84 = %x\n", tmp);
 	sio_ilpc2ahb_write(0x0, AST_SCU_BASE_LOW_ADDR, AST_SCU_BASE_HIGH_ADDR);
 
-	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x91, HIGH_GPIO_BASE_ADDR);
-	DBG("GPIO 0x91 = %x\n", tmp);
-	sio_ilpc2ahb_write(0x1, LOW_GPIO_BASE_ADDR + 0x91, HIGH_GPIO_BASE_ADDR);
-	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x91, HIGH_GPIO_BASE_ADDR);
-	DBG("GPIO 0x91 = %x\n", tmp);
+	/* Setup GPIO command cource
+	 * 0: ARM
+	 * 1: LPC
+	 * GPIOJ: 0x91, GPIOG: 0x6A
+	 */
+	tmp = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + 0x90, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x90 = %x\n", tmp);
+	sio_ilpc2ahb_writel(tmp | (0x1 << 8), LOW_GPIO_BASE_ADDR + 0x90, HIGH_GPIO_BASE_ADDR);
+	tmp = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + 0x90, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x90 = %x\n", tmp);
 
-	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x6A, HIGH_GPIO_BASE_ADDR);
-	DBG("GPIO 0x6A = %x\n", tmp);
-	sio_ilpc2ahb_write(0x1, LOW_GPIO_BASE_ADDR + 0x6A, HIGH_GPIO_BASE_ADDR);
-	tmp = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + 0x6A, HIGH_GPIO_BASE_ADDR);
-	DBG("GPIO 0x6A = %x\n", tmp);
+	tmp = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + 0x68, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x68 = %x\n", tmp);
+	sio_ilpc2ahb_writel(tmp | (0x1 << 16), LOW_GPIO_BASE_ADDR + 0x68, HIGH_GPIO_BASE_ADDR);
+	tmp = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + 0x68, HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO 0x68 = %x\n", tmp);
 
 	/* Setup GPIOs for Pair */
 	for (i = 0; i < total_pair_pin_num; i++) {
@@ -348,12 +376,14 @@ int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 		 * 0x1: output
          * 0x0: input
 		 */
-		data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+		data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
                                  HIGH_GPIO_BASE_ADDR);
-		DBG("data = %x\n", data);
-		data |= (0x1 << offset);
-		sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+		data |= (0x1 << (gg[ret].shift + offset));
+		sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
                            HIGH_GPIO_BASE_ADDR);
+		DBG("GPIO reg offset 0x%x = %x\n", gg[ret].dir_offset, \
+            sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+            HIGH_GPIO_BASE_ADDR));
 	}
 
 	/* Setup GPIOs for CFG */
@@ -374,30 +404,45 @@ int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 		 * 0x1: output
          * 0x0: input
 		 */
-		data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+		data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
                                  HIGH_GPIO_BASE_ADDR);
-		data |= (0x1 << offset);
-		sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+		data |= (0x1 << (gg[ret].shift + offset));
+		sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
                            HIGH_GPIO_BASE_ADDR);
+		DBG("GPIO reg offset 0x%x = %x\n", gg[ret].dir_offset, \
+            sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+            HIGH_GPIO_BASE_ADDR));
 	}
 
 	/* Setup GPIO for sendbit */
-	ret = ast_get_gpio_offset(cpld->sendbit, gg);
+	for (i = 0; i < total_sendbit_num; i++) {
+		ret = ast_get_gpio_offset(cpld->sendbit[i], gg);
 
-	if (ret == -1) {
-		ERR("fail to get gpio offset for %s.\n", cpld->sendbit);
-		return 1;
-	}
+		if (ret == -1) {
+			ERR("fail to get gpio offset for %s.\n", cpld->sendbit[i]);
+			return 1;
+		}
 
-	offset = atoi(cpld->sendbit + 1);
-	DBG("data_offset = %x, dir_offset = %x, offset = %d\n", \
+		offset = atoi(cpld->sendbit[i] + 1);
+		DBG("data_offset = %x, dir_offset = %x, offset = %d\n", \
         gg[ret].data_offset, gg[ret].dir_offset, offset);
 
-	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
-                             HIGH_GPIO_BASE_ADDR);
-	data |= (0x1 << offset);
-	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
-                       HIGH_GPIO_BASE_ADDR);
+		data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                                 HIGH_GPIO_BASE_ADDR);
+		data |= (0x1 << (gg[ret].shift + offset));
+		sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+                           HIGH_GPIO_BASE_ADDR);
+		DBG("GPIO reg offset 0x%x = %x\n", gg[ret].dir_offset, \
+            sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + gg[ret].dir_offset, \
+            HIGH_GPIO_BASE_ADDR));
+	}
+
+#ifdef DEBUG /* plany@20150917, debug */
+	data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + 0x3C, \
+                              HIGH_GPIO_BASE_ADDR);
+	DBG("offset 0x3C: %x\n", data);
+
+#endif
 
 	return 0;
 }
@@ -405,74 +450,87 @@ int ast_gpio_init(struct ast_cpld_cfg *cpld, struct gpio_groups *gg)
 /*
  * ast_pair_setup(), setup the Pair.
  */
-void ast_pair_setup(int value, unsigned long int data_offset, int offset)
+void ast_pair_setup(int value, unsigned int data_offset, int offset)
 {
 	int data;
 
 	DBG("value = %d\n", value);
 
-	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+	data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
                              HIGH_GPIO_BASE_ADDR);
 	data &= ~(0x1 << offset);
 	data |= (value << offset);
-	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+	sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + data_offset, \
                        HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO reg offset %x = %x\n", data_offset, \
+         sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
+                            HIGH_GPIO_BASE_ADDR));
 }
 
 /*
  * ast_cfg_setup(). setup the CFG.
  */
-void ast_cfg_setup(int value, unsigned long int data_offset, int offset)
+void ast_cfg_setup(int value, unsigned int data_offset, int offset)
 {
 	int data;
 
 	DBG("value = %d\n", value);
 
-	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+	data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
                              HIGH_GPIO_BASE_ADDR);
 	data &= ~(0x1 << offset);
 	data |= (value << offset);
-	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+	sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + data_offset, \
                        HIGH_GPIO_BASE_ADDR);
+	DBG("GPIO reg offset %x = %x\n", data_offset, \
+         sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
+                            HIGH_GPIO_BASE_ADDR));
 }
 
 /*
  * ast_cpld_trigger(), trigger the sendbit.
  */
-void ast_cpld_trigger(unsigned long int data_offset, int offset)
+void ast_cpld_trigger(unsigned int data_offset, int offset)
 {
 	int data;
 
-	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+	data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
                              HIGH_GPIO_BASE_ADDR);
 	data &= ~(0x1 << offset);
 	data |= (GPIO_LOW << offset);
-	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+	sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + data_offset, \
                        HIGH_GPIO_BASE_ADDR);
 
 	usleep(CPLD_DELAY);
 
-	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+	data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
                              HIGH_GPIO_BASE_ADDR);
 	data &= ~(0x1 << offset);
 	data |= (GPIO_HIGH << offset);
-	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+	sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + data_offset, \
                        HIGH_GPIO_BASE_ADDR);
 
 	usleep(CPLD_DELAY);
 
-	data = sio_ilpc2ahb_read(LOW_GPIO_BASE_ADDR + data_offset, \
+	data = sio_ilpc2ahb_readl(LOW_GPIO_BASE_ADDR + data_offset, \
                              HIGH_GPIO_BASE_ADDR);
 	data &= ~(0x1 << offset);
 	data |= (GPIO_LOW << offset);
-	sio_ilpc2ahb_write(data, LOW_GPIO_BASE_ADDR + data_offset, \
+	sio_ilpc2ahb_writel(data, LOW_GPIO_BASE_ADDR + data_offset, \
                        HIGH_GPIO_BASE_ADDR);
 }
 
-int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
+int ast_bypass_setup(char *name, int pair, int cfg, struct ast_cpld_cfg *cpld, \
                      struct gpio_groups *gg)
 {
-	int i, ret, offset;
+	int i, ret, offset, new_pair;
+
+	new_pair = pair;
+	/* Only for S1451, S1451 has 16 pairs, control by 2 sendbit. */
+	if (!strncmp(name, "S1451", 5)) {
+		if (pair > 8)
+			new_pair -= 8;
+	}
 
 	/* pair */
 	for (i = 0; i < total_pair_pin_num; i++) {
@@ -484,7 +542,8 @@ int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
 		}
 
 		offset = atoi(cpld->pair_g[i] + 1);
-		ast_pair_setup(((pair - 1) >> i) & 0x1, gg[ret].data_offset, offset);
+		ast_pair_setup(((new_pair - 1) >> i) & 0x1, gg[ret].data_offset, \
+                       gg[ret].shift + offset);
 	}
 
 	/* cfg */
@@ -505,21 +564,25 @@ int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
 		 * cfg_g[1] --> CFG2: OFF            , 0 for Pass Through, 1 for Bypass.
 		 * cfg_g[2] --> CFG3: ON             , 0 for Pass Through, 1 for Bypass.
 		 */
-		ast_cfg_setup((cfg >> i) & 0x1, gg[ret].data_offset, offset);
+		ast_cfg_setup((cfg >> i) & 0x1, gg[ret].data_offset, \
+                      gg[ret].shift + offset);
 	}
 
 	/* trigger */
-	ret = ast_get_gpio_offset(cpld->sendbit, gg);
+	if (!strncmp(name, "S1451", 5) && pair > 8)
+		i = 1;
+	else
+		i = 0;
+
+	ret = ast_get_gpio_offset(cpld->sendbit[i], gg);
 
 	if (ret == -1) {
-		ERR("fail to get gpio offset for %s.\n", cpld->sendbit);
+		ERR("fail to get gpio offset for %s.\n", cpld->sendbit[i]);
 		return 1;
 	}
 
-	exit(1);
-
-	offset = atoi(cpld->sendbit + 1);
-	ast_cpld_trigger(gg[ret].data_offset, offset);
+	offset = atoi(cpld->sendbit[i] + 1);
+	ast_cpld_trigger(gg[ret].data_offset, gg[ret].shift + offset);
 
 	return 0;
 }
@@ -535,7 +598,7 @@ int ast_bypass_setup(int pair, int cfg, struct ast_cpld_cfg *cpld, \
  */
 void set_gpio(int gpio, int value)
 {
-	unsigned long int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
+	unsigned int gpio_use_sel_addr, gp_io_sel_addr, gp_lvl_addr;
 	int new_gpio;
 
 	DBG("gpio = %d, value = %d\n", gpio, value);

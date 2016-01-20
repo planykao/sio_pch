@@ -22,6 +22,7 @@
 #define AST_SCU_UNLOCK                0x1688A8A8
 #define AST_WDT_BASE_HIGH_ADDR        0x1E78
 #define AST_WDT_BASE_LOW_ADDR         0x5000
+
 #define AST_WDT1_STATUS_ADDR          AST_WDT_BASE_LOW_ADDR + 0x00
 #define AST_WDT1_RELOAD_ADDR          AST_WDT_BASE_LOW_ADDR + 0x04
 #define AST_WDT1_RESTART_ADDR         AST_WDT_BASE_LOW_ADDR + 0x08
@@ -30,6 +31,25 @@
 #define AST_WDT1_EVENT_CNT_ADDR       AST_WDT_BASE_LOW_ADDR + 0x11
 #define AST_WDT1_CLR_TOUT_STATUS_ADDR AST_WDT_BASE_LOW_ADDR + 0x14
 #define AST_WDT1_RST_WIDTH_ADDR       AST_WDT_BASE_LOW_ADDR + 0x18
+
+#define AST_WDT2_STATUS_ADDR          AST_WDT_BASE_LOW_ADDR + 0x20
+#define AST_WDT2_RELOAD_ADDR          AST_WDT_BASE_LOW_ADDR + 0x24
+#define AST_WDT2_RESTART_ADDR         AST_WDT_BASE_LOW_ADDR + 0x28
+#define AST_WDT2_CTL_ADDR             AST_WDT_BASE_LOW_ADDR + 0x2C
+#define AST_WDT2_TOUT_STATUS_ADDR     AST_WDT_BASE_LOW_ADDR + 0x30
+#define AST_WDT2_EVENT_CNT_ADDR       AST_WDT_BASE_LOW_ADDR + 0x31
+#define AST_WDT2_CLR_TOUT_STATUS_ADDR AST_WDT_BASE_LOW_ADDR + 0x34
+#define AST_WDT2_RST_WIDTH_ADDR       AST_WDT_BASE_LOW_ADDR + 0x38
+
+#define AST_WDT_STATUS_ADDR(x)          AST_WDT##x##_STATUS_ADDR
+#define AST_WDT_RELOAD_ADDR(x)          AST_WDT##x##_RELOAD_ADDR 
+#define AST_WDT_RESTART_ADDR(x)         AST_WDT##x##_RESTART_ADDR
+#define AST_WDT_CTL_ADDR(x)             AST_WDT##x##_CTL_ADDR
+#define AST_WDT_TOUT_STATUS_ADDR(x)     AST_WDT##x##_TOUT_STATUS_ADDR
+#define AST_WDT_EVENT_CNT_ADDR(x)       AST_WDT##x##_EVENT_CNT_ADDR
+#define AST_WDT_CLR_TOUT_STATUS_ADDR(x) AST_WDT##x##_CLR_TOUT_STATUS_ADDR
+#define AST_WDT_RST_WIDTH_ADDR(x)       AST_WDT##x##_RST_WIDTH_ADDR
+
 #define CLOCK                         1000000 /* 1MHz */
 
 void usage(int);
@@ -88,7 +108,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Skip the header */
-	for (i = 0; i < 2; i++)
+	for (i = 0; i < 5; i++)
 		fscanf(fp, "%*[^\n]\n", NULL);
 
 	fscanf(fp, "%[^,], %x\n", chip, &base_addr);
@@ -193,20 +213,22 @@ void ast_wdt_setup(int time)
 	 * Disable WDT and select 1MHz as source clock
 	 * WARNING: The source clock can't configure as PCLK, 
 	 */
-	data = sio_ilpc2ahb_read(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
+	DBG("0x0C: %x\n", sio_ilpc2ahb_readl(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR));
+	data = sio_ilpc2ahb_readl(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
 #ifdef DEBUG
 	data &= ~((0x1 << 0) | (0x1 << 2) | (0x1 << 3));
 #else
 	data &= ~(0x1 << 0);
 	data |= (0x1 << 4); /* Make sure the clock is 1MHz */
 #endif
-	sio_ilpc2ahb_write(data, AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
+	sio_ilpc2ahb_writel(data, AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
+	DBG("0x0C: %x\n", sio_ilpc2ahb_readl(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR));
 
 	/* 
 	 * Write 0x3B value into WDT1 Clear Timeout Status Register to clear 
 	 * WDT counter register.
 	 */
-	sio_ilpc2ahb_write(0x3B, AST_WDT1_CLR_TOUT_STATUS_ADDR, \
+	sio_ilpc2ahb_writel(0x3B, AST_WDT1_CLR_TOUT_STATUS_ADDR, \
 			AST_WDT_BASE_HIGH_ADDR);
 
 	/* Set WDT1 Counter Reload Value */
@@ -227,26 +249,22 @@ void ast_wdt_setup(int time)
 
 
 	/* Enable WDT output function pin in SCU[84] D[4]/D[5] */
-	data = sio_ilpc2ahb_read(AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR);
-	data |= (0x1 << 4);
-	sio_ilpc2ahb_write(data, AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR);
-	data = sio_ilpc2ahb_read(AST_SCU_MULTI_FNC_PIN_ADDR + 1, AST_SCU_BASE_HIGH_ADDR);
-	data |= 0xF0;
-	sio_ilpc2ahb_write(data, AST_SCU_MULTI_FNC_PIN_ADDR + 1, AST_SCU_BASE_HIGH_ADDR);
-
+	DBG("SCU: %x\n", sio_ilpc2ahb_readl(AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR));
+	data = sio_ilpc2ahb_readl(AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR);
+	data |= (0x3 << 4);
+	sio_ilpc2ahb_writel(data, AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR);
+	DBG("SCU: %x\n", sio_ilpc2ahb_readl(AST_SCU_MULTI_FNC_PIN_ADDR, AST_SCU_BASE_HIGH_ADDR));
 
 	/* Enable Watchdog timer */
-	data = sio_ilpc2ahb_read(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
-	DBG("data = %d\n", data);
+	data = sio_ilpc2ahb_readl(AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
+	DBG("data = %x\n", data);
 #ifdef DEBUG
-//	data |= (0x1 << 0);
 	data |= (0x1 << 0 | (0x1 << 4));
 #else
-//	data |= ((0x1 << 0) | (0x1 << 2) | (0x1 << 3));
 	data |= ((0x1 << 0) | (0x1 << 2) | (0x1 << 3) | (0x1 << 4));
 #endif
-	DBG("data = %d\n", data);
-	sio_ilpc2ahb_write(data, AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
+	DBG("data = %x\n", data);
+	sio_ilpc2ahb_writel(data, AST_WDT1_CTL_ADDR, AST_WDT_BASE_HIGH_ADDR);
 
 #ifdef DEBUG
 	monitor();

@@ -38,7 +38,7 @@ else
 	CFLAGS += -DNSCAN_PCI
 endif
 
-CFLAGS += -I$(INCLUDE) -D_GNU_SOURCE
+CFLAGS += -I$(INCLUDE) -D_GNU_SOURCE -Wall
 
 GIT = $(shell which git > /dev/null 2>&1; echo $$?)
 

@@ -37,6 +37,8 @@
 #define AST_CALIBRATION
 #undef AST_CALIBRATION
 
+#define NCT_BANK_SELECT_REG 0x4E
+
 /* 
  * Define the struct for Sensor.
  * Type 0: Temperature; 1: FAN Speed; 2: Voltage > 0 and < 2.048V; 
@@ -557,7 +559,7 @@ void bank_select(unsigned int address, unsigned int bank)
 	unsigned char data;
 	int plus = 5;
 
-	outb_p(EFER, address + plus); /* Bank select */
+	outb_p(NCT_BANK_SELECT_REG, address + plus); /* Bank select */
 	data = inb_p(address + plus + 1);
 
 	if (strcmp("NCT6776F", chip_model) == 0 || \

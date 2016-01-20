@@ -4,7 +4,7 @@ SCAN_SIO_OBJS = $(TOOLS_DIR)/libsio.o
 I2C_OBJS = $(TOOLS_DIR)/i2cbusses.o $(TOOLS_DIR)/util.o $(TOOLS_DIR)/scan_pci.o $(TOOLS_DIR)/libpch.o
 
 # Tools
-TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio i2cget nct6683d
+TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio i2cget nct6683d read_fw_ver
 
 all: $(addprefix $(TOOLS_DIR)/,$(TOOLS_TARGET))
 
@@ -33,6 +33,9 @@ $(TOOLS_DIR)/i2cget: $(I2C_OBJS) $(TOOLS_DIR)/i2cget.c
 	$(CC) $(CFLAGS) -O2 -lcurses -o $@ $^
 
 $(TOOLS_DIR)/nct6683d: $(OBJS) $(TOOLS_DIR)/nct6683d.c
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(TOOLS_DIR)/read_fw_ver: $(OBJS) $(TOOLS_DIR)/read_fw_ver.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 # Objects

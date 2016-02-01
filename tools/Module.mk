@@ -4,7 +4,7 @@ SCAN_SIO_OBJS = $(TOOLS_DIR)/libsio.o
 I2C_OBJS = $(TOOLS_DIR)/i2cbusses.o $(TOOLS_DIR)/util.o $(TOOLS_DIR)/scan_pci.o $(TOOLS_DIR)/libpch.o
 
 # Tools
-TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio i2cget nct6683d read_fw_ver
+TOOLS_TARGET = gpio loopback hwmon bypass wdt scan_sio i2cget nct6683d read_fw_ver scan_pci
 
 all: $(addprefix $(TOOLS_DIR)/,$(TOOLS_TARGET))
 
